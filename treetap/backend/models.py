@@ -11,6 +11,8 @@ from datetime import datetime
 @dataclass
 class Measurement:
     meas_id: int
+    ingest_id: Optional[int] = None
+    local_meas_id: Optional[int] = None
     meas_note: Optional[str] = ""
     device_version: str = "v2"
 
@@ -19,6 +21,8 @@ class Measurement:
 class Tap:
     tap_id: int
     meas_id: int
+    ingest_id: Optional[int] = None
+    local_tap_id: Optional[int] = None
     tap_time: Optional[str] = None
     separation_cm: Optional[float] = 0.0
     speed_us: Optional[float] = 0.0

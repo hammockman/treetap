@@ -12,7 +12,14 @@ dependencies = [
     "duckdb>=1.0.0",
     "pandas>=2.0.0",
     "pyarrow>=14.0.0",
+    "PyQt6>=6.0.0",
+    "pyqtgraph>=0.13.0",
+    "pyserial>=3.5",
 ]
 
 [project.scripts]
 treetap = "treetap.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["treetap*"]

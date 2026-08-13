@@ -15,6 +15,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="TreeTap Acoustic Data Management CLI")
     subparsers = parser.add_subparsers(dest="command", help="Sub-commands")
 
+    # gui subcommand
+    gui_parser = subparsers.add_parser("gui", help="Launch PyQt6 GUI visualizer")
+    gui_parser.add_argument("--db", default="treetap.duckdb", help="DuckDB database file path")
+
     # v2 subcommand
     v2_parser = subparsers.add_parser("v2", help="Version 2 file & archive management")
     v2_sub = v2_parser.add_subparsers(dest="v2_command", help="v2 commands")
@@ -29,13 +33,16 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "v2" and args.v2_command == "ingest":
+    if args.command == "gui":
+        from treetap.gui import launch_gui
+        launch_gui(db_path=args.db)
+    elif args.command == "v2" and args.v2_command == "ingest":
         print(f"Starting v2 ingestion from '{args.data_dir}' into '{args.db}'...")
         stats = ingest_v2_directory(data_dir=args.data_dir, db_path=args.db)
         print("Ingestion completed:")
         print(json.dumps(stats, indent=2))
     elif args.command == "info":
-        with get_connection(db_path=args.db) as conn:
+        with get_connection(db_path=args.db, read_only=True) as conn:
             repo = TreeTapRepository(conn)
             stats = repo.get_summary_stats()
             print(f"Database Stats for '{args.db}':")

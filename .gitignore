@@ -1,0 +1,22 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+
+# Database files
+*.duckdb
+*.duckdb.wal
+
+# Distribution / build
+dist/
+build/
+
+# Local sample data
+data/
