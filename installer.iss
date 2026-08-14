@@ -3,6 +3,7 @@ AppName=TreeTap
 AppVersion=0.1.0
 DefaultDirName={autopf}\TreeTap
 DefaultGroupName=TreeTap
+SetupIconFile=assets\app.ico
 UninstallDisplayIcon={app}\TreeTap.exe
 OutputBaseFilename=TreeTapSetup
 Compression=lzma2

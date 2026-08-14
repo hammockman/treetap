@@ -34,6 +34,9 @@ jobs:
           pyinstaller --name="TreeTap" `
             --windowed `
             --noconfirm `
+            --icon="assets/app.ico" `
+            --add-data "assets;assets" `
+            --add-data "treetap/gui;treetap/gui" `
             --exclude-module PyQt6.QtWebEngineCore `
             --exclude-module PyQt6.QtWebEngineWidgets `
             --exclude-module PyQt6.QtWebEngineQuick `
@@ -57,7 +60,6 @@ jobs:
             --exclude-module scipy `
             --exclude-module IPython `
             --exclude-module PIL `
-            --add-data "treetap/gui;treetap/gui" `
             treetap/cli.py
 
       - name: Compile Windows Installer with Inno Setup

@@ -57,6 +57,10 @@ class TreeTapMainWindow(QMainWindow):
         self.update_window_title()
         self.resize(1200, 800)
 
+        icon_path = os.path.join(os.path.dirname(__file__), "assets", "app_icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
         # Main Central Widget
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
