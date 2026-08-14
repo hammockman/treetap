@@ -18,6 +18,7 @@ class TreeTapTableModel(QAbstractTableModel):
         "Tap Time",
         "Separation (cm)",
         "ToF (us)",
+        "ToF Manual (us)",
         "Channels",
         "Samples",
         "Rate (Hz)",
@@ -42,6 +43,7 @@ class TreeTapTableModel(QAbstractTableModel):
                 strftime(t.tap_time, '%Y-%m-%d %H:%M:%S') AS tap_time,
                 t.separation_cm,
                 t.speed_us,
+                t.tof_manual,
                 COALESCE(m.channels, 2) AS channels,
                 COALESCE(m.samples, 2048) AS samples,
                 COALESCE(m.rate_hz, 500000.0) AS rate_hz,
@@ -49,17 +51,39 @@ class TreeTapTableModel(QAbstractTableModel):
                 COALESCE(m.device_version, 'v2') AS device_version,
                 COALESCE(m.source_file, '') AS source_file,
                 t.meas_id AS global_meas_id,
-                t.tap_id AS global_tap_id
+                t.tap_id AS global_tap_id,
+                COALESCE(m.offset_ch1, 0.0) AS offset_ch1,
+                COALESCE(m.offset_ch2, 0.0) AS offset_ch2,
+                COALESCE(m.std_ch1, 0.0) AS std_ch1,
+                COALESCE(m.std_ch2, 0.0) AS std_ch2
             FROM taps t
             LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
             LEFT JOIN measurements meas ON t.meas_id = meas.meas_id
             ORDER BY t.tap_id ASC
         """
         self._df = conn.execute(query).df()
-        # Data list for view columns 0..12
+        # Data list for view columns 0..13
         display_df = self._df.iloc[:, :len(self.HEADERS)]
         self._data = display_df.values.tolist()
         self.endResetModel()
+
+    def update_tof_manual(self, tap_id: int, tof_manual: Optional[float]) -> None:
+        """
+        Updates in-memory model data for tof_manual for a specific tap and notifies view.
+        """
+        if self._df is None or self._df.empty:
+            return
+
+        for r_idx in range(len(self._df)):
+            g_tap = int(self._df.iloc[r_idx]["global_tap_id"]) if "global_tap_id" in self._df.columns else int(self._df.iloc[r_idx]["tap_id"])
+            if g_tap == tap_id:
+                if "tof_manual" in self._df.columns:
+                    self._df.iloc[r_idx, self._df.columns.get_loc("tof_manual")] = tof_manual if tof_manual is not None else np.nan
+                tof_col_idx = 7  # Column index of ToF Manual (us)
+                self._data[r_idx][tof_col_idx] = tof_manual
+                model_idx = self.index(r_idx, tof_col_idx)
+                self.dataChanged.emit(model_idx, model_idx, [Qt.ItemDataRole.DisplayRole])
+                break
 
     def get_initial_hidden_columns(self) -> List[int]:
         hidden = []

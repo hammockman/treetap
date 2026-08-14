@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS taps (
     tap_time TIMESTAMP,
     separation_cm DOUBLE,
     speed_us DOUBLE,
+    tof_manual DOUBLE,
     meas_note VARCHAR,
     FOREIGN KEY (meas_id) REFERENCES measurements(meas_id),
     FOREIGN KEY (ingest_id) REFERENCES ingest_log(ingest_id)
@@ -96,6 +97,7 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
         "ALTER TABLE measurements ADD COLUMN IF NOT EXISTS local_meas_id INTEGER;",
         "ALTER TABLE taps ADD COLUMN IF NOT EXISTS ingest_id INTEGER;",
         "ALTER TABLE taps ADD COLUMN IF NOT EXISTS local_tap_id INTEGER;",
+        "ALTER TABLE taps ADD COLUMN IF NOT EXISTS tof_manual DOUBLE;",
     ]
     for m in migrations:
         try:

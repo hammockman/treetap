@@ -22,6 +22,7 @@ class TreeTapTreeModel(QStandardItemModel):
         "Tap Time",
         "Separation (cm)",
         "ToF (us)",
+        "ToF Manual (us)",
         "Source File",
     ]
 
@@ -121,6 +122,7 @@ class TreeTapTreeModel(QStandardItemModel):
                     QStandardItem(""),
                     QStandardItem(""),
                     item_speed,
+                    QStandardItem(""),
                     item_src,
                 ]
 
@@ -139,6 +141,10 @@ class TreeTapTreeModel(QStandardItemModel):
 
                     speed_val = float(row["speed_us"]) if "speed_us" in row and pd.notnull(row["speed_us"]) else -1.0
                     speed_us = f"{speed_val:.2f}" if speed_val >= 0 else ""
+
+                    tof_man_val = float(row["tof_manual"]) if "tof_manual" in row and pd.notnull(row["tof_manual"]) else -1.0
+                    tof_man_str = f"{tof_man_val:.2f}" if tof_man_val >= 0 else ""
+
                     source_file = str(row["source_file"]) if "source_file" in row and pd.notnull(row["source_file"]) else ""
 
                     c_name = QStandardItem(f"  Tap {local_tap_id}")
@@ -147,9 +153,10 @@ class TreeTapTreeModel(QStandardItemModel):
                     c_time = QStandardItem(tap_time)
                     c_sep = QStandardItem(sep_cm)
                     c_speed = QStandardItem(speed_us)
+                    c_tof_man = QStandardItem(tof_man_str)
                     c_src = QStandardItem(source_file)
 
-                    for c in (c_tid, c_sep, c_speed):
+                    for c in (c_tid, c_sep, c_speed, c_tof_man):
                         c.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
                     off1 = float(row.get("offset_ch1", 0.0) or 0.0) if "offset_ch1" in row and pd.notnull(row["offset_ch1"]) else 0.0
@@ -160,7 +167,7 @@ class TreeTapTreeModel(QStandardItemModel):
 
                     is_extraordinary = abs(off1) > 20.0 or abs(off2) > 20.0 or abs(std1) > 10.0 or abs(std2) > 10.0 or abs(delay) > 500.0
 
-                    child_row = [c_name, c_note, c_tid, c_time, c_sep, c_speed, c_src]
+                    child_row = [c_name, c_note, c_tid, c_time, c_sep, c_speed, c_tof_man, c_src]
                     red_color = QColor("#D32F2F")
                     tooltip_str = (
                         f"⚠️ Extraordinary metadata values detected:\n"
@@ -184,3 +191,24 @@ class TreeTapTreeModel(QStandardItemModel):
                 item_ingest.appendRow(meas_row)
 
             self.appendRow(ingest_row)
+
+    def update_tof_manual(self, tap_id: int, tof_manual: Optional[float]) -> None:
+        """
+        Updates in-memory tree model item text for ToF Manual (us) for a specific tap.
+        """
+        tof_str = f"{tof_manual:.2f}" if tof_manual is not None and tof_manual >= 0 else ""
+        for i_row in range(self.rowCount()):
+            ingest_item = self.item(i_row, 0)
+            if not ingest_item:
+                continue
+            for m_row in range(ingest_item.rowCount()):
+                meas_item = ingest_item.child(m_row, 0)
+                if not meas_item:
+                    continue
+                for t_row in range(meas_item.rowCount()):
+                    t_item = meas_item.child(t_row, 0)
+                    if t_item and t_item.data(self.TAP_ID_ROLE) == tap_id:
+                        tof_item = meas_item.child(t_row, 6)  # Column 6: ToF Manual (us)
+                        if tof_item:
+                            tof_item.setText(tof_str)
+                        return

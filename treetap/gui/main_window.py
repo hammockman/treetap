@@ -196,6 +196,7 @@ class TreeTapMainWindow(QMainWindow):
         lower_layout.setContentsMargins(0, 0, 0, 0)
 
         self.plot_widget = TapPlotWidget(self)
+        self.plot_widget.sig_manual_tof_changed.connect(self.on_manual_tof_changed)
         lower_layout.addWidget(self.plot_widget, stretch=3)
 
         self.tap_selector = TapSelectorWidget(self)
@@ -543,6 +544,36 @@ class TreeTapMainWindow(QMainWindow):
             )
 
         self.plot_widget.highlight_taps(selected_tap_ids)
+
+    def on_manual_tof_changed(self, delta_t: Optional[float]) -> None:
+        """
+        Records manual time-of-flight delta (in μs) to DuckDB in tof_manual column of taps table.
+        """
+        if not self.conn:
+            return
+
+        if self.is_read_only:
+            self.status_bar.showMessage("Database is open read-only. Cannot record manual ToF.")
+            return
+
+        # Only record if exactly 1 single tap is currently selected
+        if len(self.plot_widget.highlighted_taps) != 1:
+            return
+
+        target_tap_id = next(iter(self.plot_widget.highlighted_taps))
+
+        try:
+            if delta_t is not None:
+                self.conn.execute("UPDATE taps SET tof_manual = ? WHERE tap_id = ?", [float(delta_t), target_tap_id])
+                self.status_bar.showMessage(f"Recorded Manual ToF = {delta_t:.2f} μs for Tap #{target_tap_id}")
+            else:
+                self.conn.execute("UPDATE taps SET tof_manual = NULL WHERE tap_id = ?", [target_tap_id])
+                self.status_bar.showMessage(f"Cleared Manual ToF for Tap #{target_tap_id}")
+
+            self.table_model.update_tof_manual(target_tap_id, delta_t)
+            self.tree_model.update_tof_manual(target_tap_id, delta_t)
+        except Exception as err:
+            self.status_bar.showMessage(f"Failed to record manual ToF: {err}")
 
     def on_tree_context_menu(self, pos: QPoint) -> None:
         selected_indexes = self.tree_view.selectionModel().selectedRows()

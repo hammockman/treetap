@@ -6,7 +6,7 @@ from typing import Dict, List, Tuple, Optional, Any
 import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QColor
 
 # Distinct color palette for overlaid tap traces
@@ -30,6 +30,8 @@ class TapPlotWidget(QWidget):
     """
     Plots overlaid CH1 (solid) and CH2 (dashed) signals for multiple taps on a single axis.
     """
+
+    sig_manual_tof_changed = pyqtSignal(object)  # Emits float delta_t (or None when cleared)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -311,7 +313,7 @@ class TapPlotWidget(QWidget):
         vb.setLimits(xMin=x0, xMax=x1, yMin=y0, yMax=y1)
         vb.setRange(xRange=(x0, x1), yRange=(y0, y1), padding=0)
 
-    def clear_markers(self) -> None:
+    def clear_markers(self, emit_signal: bool = True) -> None:
         """
         Removes all placed vertical measurement markers from the plot.
         """
@@ -322,6 +324,15 @@ class TapPlotWidget(QWidget):
                 pass
         self.marker_lines.clear()
         self.update_marker_display()
+        if emit_signal:
+            self.sig_manual_tof_changed.emit(None)
+
+    def emit_manual_tof(self) -> None:
+        if len(self.marker_lines) >= 2:
+            x1 = float(self.marker_lines[0].value())
+            x2 = float(self.marker_lines[1].value())
+            delta_t = abs(x2 - x1)
+            self.sig_manual_tof_changed.emit(delta_t)
 
     def update_marker_display(self) -> None:
         """
@@ -378,7 +389,7 @@ class TapPlotWidget(QWidget):
 
         # If 2 markers already exist, clear and start fresh with Marker 1
         if len(self.marker_lines) >= 2:
-            self.clear_markers()
+            self.clear_markers(emit_signal=False)
 
         idx = len(self.marker_lines) + 1
         color_hex = "#FF7F0E" if idx == 1 else "#9467BD"
@@ -397,10 +408,13 @@ class TapPlotWidget(QWidget):
             labelOpts={"position": 0.95, "color": color_hex, "movable": True},
         )
         marker.sigPositionChanged.connect(self.update_marker_display)
+        marker.sigPositionChangeFinished.connect(self.emit_manual_tof)
         self.plot_widget.addItem(marker, ignoreBounds=True)
         self.marker_lines.append(marker)
 
         self.update_marker_display()
+        if len(self.marker_lines) >= 2:
+            self.emit_manual_tof()
 
     def on_mouse_moved(self, pos: Any) -> None:
         if isinstance(pos, tuple):
