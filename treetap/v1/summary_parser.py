@@ -115,10 +115,13 @@ def parse_v1_text(
 
             meta = TapMetadata(
                 tap_id=tap_id,
-                firmware_version="V4.0.3",
+                firmware_version=firmware_ver,
                 device_version="v1",
-                gain=t_dict["quality_metric_2"],
-                tap_note=f"Dir={t_dict['direction']}, ErrCode={t_dict['quality_metric_1']}",
+                gain=None,
+                v1direction=t_dict["direction"],
+                v1col5=t_dict["quality_metric_1"],
+                v1col6=t_dict["quality_metric_2"],
+                tap_note=f"Dir={t_dict['direction']}, Col5={t_dict['quality_metric_1']}, Col6={t_dict['quality_metric_2']}",
                 source_file=source_name,
             )
 

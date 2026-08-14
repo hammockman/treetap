@@ -110,6 +110,7 @@ class TreeTapRepository:
                 "tap_time": tap_time_val,
                 "separation_cm": t.separation_cm,
                 "speed_us": t.speed_us,
+                "tof_manual": getattr(t, "tof_manual", None),
                 "meas_note": t.meas_note,
             })
         df = pd.DataFrame(records)
@@ -149,6 +150,9 @@ class TreeTapRepository:
                 "tap_note": m.tap_note,
                 "source_file": m.source_file,
                 "device_version": m.device_version,
+                "v1direction": getattr(m, "v1direction", None),
+                "v1col5": getattr(m, "v1col5", None),
+                "v1col6": getattr(m, "v1col6", None),
             }
             for m in metadata_list
         ]

@@ -47,6 +47,9 @@ class TapMetadata:
     tap_note: Optional[str] = ""
     source_file: Optional[str] = ""
     device_version: str = "v2"
+    v1direction: Optional[str] = None
+    v1col5: Optional[int] = None
+    v1col6: Optional[int] = None
 
 
 @dataclass

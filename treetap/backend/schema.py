@@ -56,6 +56,9 @@ CREATE TABLE IF NOT EXISTS tap_metadata (
     tap_note VARCHAR,
     source_file VARCHAR,
     device_version VARCHAR DEFAULT 'v2',
+    v1direction VARCHAR,
+    v1col5 INTEGER,
+    v1col6 INTEGER,
     FOREIGN KEY (tap_id) REFERENCES taps(tap_id)
 );
 
@@ -98,6 +101,9 @@ def init_schema(conn: duckdb.DuckDBPyConnection) -> None:
         "ALTER TABLE taps ADD COLUMN IF NOT EXISTS ingest_id INTEGER;",
         "ALTER TABLE taps ADD COLUMN IF NOT EXISTS local_tap_id INTEGER;",
         "ALTER TABLE taps ADD COLUMN IF NOT EXISTS tof_manual DOUBLE;",
+        "ALTER TABLE tap_metadata ADD COLUMN IF NOT EXISTS v1direction VARCHAR;",
+        "ALTER TABLE tap_metadata ADD COLUMN IF NOT EXISTS v1col5 INTEGER;",
+        "ALTER TABLE tap_metadata ADD COLUMN IF NOT EXISTS v1col6 INTEGER;",
     ]
     for m in migrations:
         try:
