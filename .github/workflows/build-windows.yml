@@ -12,6 +12,10 @@ jobs:
   build-windows:
     runs-on: windows-latest
 
+    permissions:
+      contents: read
+      actions: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -68,12 +72,17 @@ jobs:
       - name: Delete Previous Build Artifacts
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Continue'
           try {
-            $artifacts = gh api "repos/${{ github.repository }}/actions/artifacts" | ConvertFrom-Json
-            foreach ($art in $artifacts.artifacts) {
+            $response = gh api "repos/${{ github.repository }}/actions/artifacts" | ConvertFrom-Json
+            foreach ($art in $response.artifacts) {
               if ($art.name -eq 'TreeTap-Windows-Setup') {
                 Write-Host "Deleting old artifact ID: $($art.id)"
-                gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$($art.id)"
+                try {
+                  gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$($art.id)"
+                } catch {
+                  Write-Host "Could not delete artifact $($art.id): $_"
+                }
               }
             }
           } catch {
