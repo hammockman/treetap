@@ -124,7 +124,27 @@ class TreeTapMainWindow(QMainWindow):
         self.proxy_model.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.proxy_model.setFilterKeyColumn(-1)
 
+        VIEW_STYLESHEET = """
+            QAbstractItemView::item:selected {
+                background-color: #E0E0E0;
+                color: #000000;
+            }
+            QAbstractItemView::item:selected:active {
+                background-color: #E0E0E0;
+                color: #000000;
+            }
+            QAbstractItemView::item:selected:hover {
+                background-color: #D5D5D5;
+                color: #000000;
+            }
+            QAbstractItemView::item:hover {
+                background-color: #F5F5F5;
+                color: #000000;
+            }
+        """
+
         self.table_view = QTableView()
+        self.table_view.setStyleSheet(VIEW_STYLESHEET)
         self.table_view.setModel(self.proxy_model)
         self.table_view.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.table_view.setSelectionMode(QTableView.SelectionMode.ExtendedSelection)
@@ -150,6 +170,7 @@ class TreeTapMainWindow(QMainWindow):
         self.tree_proxy.setFilterKeyColumn(-1)
 
         self.tree_view = QTreeView()
+        self.tree_view.setStyleSheet(VIEW_STYLESHEET)
         self.tree_view.setModel(self.tree_proxy)
         self.tree_view.setSelectionBehavior(QTreeView.SelectionBehavior.SelectRows)
         self.tree_view.setSelectionMode(QTreeView.SelectionMode.ExtendedSelection)
