@@ -60,9 +60,14 @@ jobs:
             --add-data "treetap/gui;treetap/gui" `
             treetap/cli.py
 
+      - name: Delete Previous Build Artifacts
+        uses: jimschubert/delete-artifacts-action@v1
+        with:
+          artifact_name: 'TreeTap-Windows-build'
+          min_bytes: '0'
+
       - name: Upload Optimized Windows Executable Artifact
         uses: actions/upload-artifact@v4
         with:
           name: TreeTap-Windows-build
           path: dist/TreeTap
-          retention-days: 1
