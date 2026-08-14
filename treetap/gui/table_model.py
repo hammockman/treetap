@@ -6,6 +6,7 @@ from typing import List, Any, Optional
 import pandas as pd
 import duckdb
 from PyQt6.QtCore import QAbstractTableModel, Qt, QModelIndex
+from PyQt6.QtGui import QColor
 
 
 class TreeTapTableModel(QAbstractTableModel):
@@ -99,6 +100,33 @@ class TreeTapTableModel(QAbstractTableModel):
             if isinstance(val, float):
                 return f"{val:.2f}"
             return str(val)
+
+        if role == Qt.ItemDataRole.ForegroundRole:
+            if not self._df.empty and 0 <= index.row() < len(self._df):
+                row_series = self._df.iloc[index.row()]
+                off1 = abs(float(row_series.get("offset_ch1", 0.0) or 0.0))
+                off2 = abs(float(row_series.get("offset_ch2", 0.0) or 0.0))
+                std1 = abs(float(row_series.get("std_ch1", 0.0) or 0.0))
+                std2 = abs(float(row_series.get("std_ch2", 0.0) or 0.0))
+                delay = abs(float(row_series.get("delay_us", 0.0) or 0.0))
+                if off1 > 20.0 or off2 > 20.0 or std1 > 10.0 or std2 > 10.0 or delay > 500.0:
+                    return QColor("#D32F2F")  # Vibrant Red text for extraordinary taps
+
+        if role == Qt.ItemDataRole.ToolTipRole:
+            if not self._df.empty and 0 <= index.row() < len(self._df):
+                row_series = self._df.iloc[index.row()]
+                off1 = float(row_series.get("offset_ch1", 0.0) or 0.0)
+                off2 = float(row_series.get("offset_ch2", 0.0) or 0.0)
+                std1 = float(row_series.get("std_ch1", 0.0) or 0.0)
+                std2 = float(row_series.get("std_ch2", 0.0) or 0.0)
+                delay = float(row_series.get("delay_us", 0.0) or 0.0)
+                if abs(off1) > 20.0 or abs(off2) > 20.0 or abs(std1) > 10.0 or abs(std2) > 10.0 or abs(delay) > 500.0:
+                    return (
+                        f"⚠️ Extraordinary metadata values detected:\n"
+                        f"  • Offset: Ch1={off1:.2f}, Ch2={off2:.2f}\n"
+                        f"  • Noise Std: Ch1={std1:.2f}, Ch2={std2:.2f}\n"
+                        f"  • Delay: {delay:.2f} μs"
+                    )
 
         if role == Qt.ItemDataRole.TextAlignmentRole:
             col = index.column()

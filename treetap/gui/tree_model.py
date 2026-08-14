@@ -6,7 +6,7 @@ Organizes Measurement Sessions as parent rows and individual Taps as child rows.
 from typing import Dict, List, Optional, Any
 import pandas as pd
 
-from PyQt6.QtGui import QStandardItemModel, QStandardItem
+from PyQt6.QtGui import QStandardItemModel, QStandardItem, QColor
 from PyQt6.QtCore import Qt
 
 
@@ -152,13 +152,32 @@ class TreeTapTreeModel(QStandardItemModel):
                     for c in (c_tid, c_sep, c_speed):
                         c.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
+                    off1 = float(row.get("offset_ch1", 0.0) or 0.0) if "offset_ch1" in row and pd.notnull(row["offset_ch1"]) else 0.0
+                    off2 = float(row.get("offset_ch2", 0.0) or 0.0) if "offset_ch2" in row and pd.notnull(row["offset_ch2"]) else 0.0
+                    std1 = float(row.get("std_ch1", 0.0) or 0.0) if "std_ch1" in row and pd.notnull(row["std_ch1"]) else 0.0
+                    std2 = float(row.get("std_ch2", 0.0) or 0.0) if "std_ch2" in row and pd.notnull(row["std_ch2"]) else 0.0
+                    delay = float(row.get("delay_us", 0.0) or 0.0) if "delay_us" in row and pd.notnull(row["delay_us"]) else 0.0
+
+                    is_extraordinary = abs(off1) > 20.0 or abs(off2) > 20.0 or abs(std1) > 10.0 or abs(std2) > 10.0 or abs(delay) > 500.0
+
                     child_row = [c_name, c_note, c_tid, c_time, c_sep, c_speed, c_src]
+                    red_color = QColor("#D32F2F")
+                    tooltip_str = (
+                        f"⚠️ Extraordinary metadata values detected:\n"
+                        f"  • Offset: Ch1={off1:.2f}, Ch2={off2:.2f}\n"
+                        f"  • Noise Std: Ch1={std1:.2f}, Ch2={std2:.2f}\n"
+                        f"  • Delay: {delay:.2f} μs"
+                    ) if is_extraordinary else None
+
                     for col_item in child_row:
                         col_item.setData("tap", self.ITEM_TYPE_ROLE)
                         col_item.setData(g_meas_id, self.MEAS_ID_ROLE)
                         col_item.setData(g_tap_id, self.TAP_ID_ROLE)
                         col_item.setData(ingest_id, self.INGEST_ID_ROLE)
                         col_item.setData(source_file, self.SOURCE_FILE_ROLE)
+                        if is_extraordinary:
+                            col_item.setForeground(red_color)
+                            col_item.setToolTip(tooltip_str)
 
                     item_meas.appendRow(child_row)
 
