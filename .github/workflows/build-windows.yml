@@ -1,4 +1,4 @@
-name: Build Windows Executable
+name: Build Windows Executable & Installer
 
 on:
   push:
@@ -21,8 +21,8 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install UPX Packer
-        run: choco install upx --no-progress -y
+      - name: Install UPX & Inno Setup
+        run: choco install upx innosetup --no-progress -y
 
       - name: Install dependencies
         run: |
@@ -60,14 +60,17 @@ jobs:
             --add-data "treetap/gui;treetap/gui" `
             treetap/cli.py
 
+      - name: Compile Windows Installer with Inno Setup
+        run: iscc installer.iss
+
       - name: Delete Previous Build Artifacts
         uses: jimschubert/delete-artifacts-action@v1
         with:
-          artifact_name: 'TreeTap-Windows-build'
+          artifact_name: 'TreeTap-Windows-Setup'
           min_bytes: '0'
 
-      - name: Upload Optimized Windows Executable Artifact
+      - name: Upload Windows Setup Installer Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TreeTap-Windows-build
-          path: dist/TreeTap
+          name: TreeTap-Windows-Setup
+          path: Output/TreeTapSetup.exe
