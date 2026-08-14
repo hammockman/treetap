@@ -394,6 +394,9 @@ class TreeTapMainWindow(QMainWindow):
 
     def on_tree_selection_changed(self, selected: QItemSelection, deselected: QItemSelection) -> None:
         selected_indexes = self.tree_view.selectionModel().selectedRows()
+        if not selected_indexes:
+            selected_indexes = self.tree_view.selectionModel().selectedIndexes()
+
         if not selected_indexes or not self.conn:
             self.current_meas_id = None
             self.plot_widget.clear_markers()
@@ -406,6 +409,19 @@ class TreeTapMainWindow(QMainWindow):
         selected_ingest_ids = set()
 
         def _collect_tree_node(item: QStandardItem) -> None:
+            if not item:
+                return
+
+            # Normalize to column 0 item so rowCount() finds all child nodes
+            if item.column() != 0:
+                parent = item.parent()
+                if parent:
+                    item = parent.child(item.row(), 0)
+                else:
+                    item = self.tree_model.item(item.row(), 0)
+            if not item:
+                return
+
             item_type = item.data(TreeTapTreeModel.ITEM_TYPE_ROLE)
             if item_type == "ingest":
                 ingest_id = item.data(TreeTapTreeModel.INGEST_ID_ROLE)
@@ -469,15 +485,22 @@ class TreeTapMainWindow(QMainWindow):
                 "ch2_samples": r[4] if r[4] else [],
             })
 
+        n_plotted = sum(1 for t in taps_data if len(t.get("ch1_samples", [])) > 0 or len(t.get("ch2_samples", [])) > 0)
         colors = self.plot_widget.set_tap_signals(taps_data)
         self.tap_selector.populate_taps(taps_data, colors)
 
         meas_str = ", ".join(str(m) for m in meas_id_list[:3])
         if len(meas_id_list) > 3:
             meas_str += f" (+{len(meas_id_list) - 3} more)"
-        self.status_bar.showMessage(
-            f"Measurement Session(s) {meas_str} selected — Overlaid {len(taps_data)} tap signals"
-        )
+
+        if n_plotted > 0:
+            self.status_bar.showMessage(
+                f"Measurement Session(s) {meas_str} selected — Overlaid {n_plotted} tap signals"
+            )
+        else:
+            self.status_bar.showMessage(
+                f"Measurement Session(s) {meas_str} selected — (V1 summary session; no raw waveform arrays stored)"
+            )
 
         self.plot_widget.highlight_taps(selected_tap_ids)
 
