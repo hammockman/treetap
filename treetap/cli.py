@@ -33,9 +33,24 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    if args.command == "gui":
-        from treetap.gui import launch_gui
-        launch_gui(db_path=args.db)
+    # Default to GUI when double-clicked or called without subcommands
+    if args.command == "gui" or args.command is None:
+        db_path = getattr(args, "db", "treetap.duckdb") or "treetap.duckdb"
+        try:
+            from treetap.gui import launch_gui
+            launch_gui(db_path=db_path)
+        except Exception as err:
+            import traceback
+            tb_str = traceback.format_exc()
+            with open("treetap_crash.log", "w") as f:
+                f.write(tb_str)
+            try:
+                from PyQt6.QtWidgets import QApplication, QMessageBox
+                app = QApplication.instance() or QApplication(sys.argv)
+                QMessageBox.critical(None, "TreeTap Startup Error", f"Application failed to start:\n\n{err}\n\nTraceback written to treetap_crash.log")
+            except Exception:
+                pass
+            sys.exit(1)
     elif args.command == "v2" and args.v2_command == "ingest":
         print(f"Starting v2 ingestion from '{args.data_dir}' into '{args.db}'...")
         stats = ingest_v2_directory(data_dir=args.data_dir, db_path=args.db)
