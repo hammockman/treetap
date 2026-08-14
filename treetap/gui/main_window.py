@@ -403,8 +403,17 @@ class TreeTapMainWindow(QMainWindow):
 
         selected_tap_ids = set()
         selected_meas_ids = set()
+        selected_ingest_ids = set()
 
         def _collect_tree_node(item: QStandardItem) -> None:
+            item_type = item.data(TreeTapTreeModel.ITEM_TYPE_ROLE)
+            if item_type == "ingest":
+                ingest_id = item.data(TreeTapTreeModel.INGEST_ID_ROLE)
+                if ingest_id is not None:
+                    selected_ingest_ids.add(int(ingest_id))
+                # Do not recurse into children of an Ingestion node to plot all signals
+                return
+
             meas_id = item.data(TreeTapTreeModel.MEAS_ID_ROLE)
             if meas_id is not None:
                 selected_meas_ids.add(int(meas_id))
@@ -424,42 +433,51 @@ class TreeTapMainWindow(QMainWindow):
             if item:
                 _collect_tree_node(item)
 
-        if selected_meas_ids:
-            placeholders = ", ".join(["?"] * len(selected_meas_ids))
-            query = f"""
-                SELECT 
-                    t.tap_id,
-                    COALESCE(m.rate_hz, 500000.0) AS rate_hz,
-                    COALESCE(m.delay_us, 0.0) AS delay_us,
-                    s.ch1_samples,
-                    s.ch2_samples
-                FROM taps t
-                LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
-                LEFT JOIN tap_signals s ON t.tap_id = s.tap_id
-                WHERE t.meas_id IN ({placeholders})
-                ORDER BY t.tap_id ASC
-            """
-            meas_id_list = [int(m) for m in sorted(selected_meas_ids)]
-            rows = self.conn.execute(query, meas_id_list).fetchall()
-            taps_data = []
-            for r in rows:
-                taps_data.append({
-                    "tap_id": r[0],
-                    "rate_hz": r[1],
-                    "delay_us": r[2],
-                    "ch1_samples": r[3] if r[3] else [],
-                    "ch2_samples": r[4] if r[4] else [],
-                })
+        if not selected_meas_ids:
+            self.current_meas_id = None
+            self.plot_widget.clear_markers()
+            self.plot_widget.clear_plots()
+            self.tap_selector.populate_taps([], {})
+            if selected_ingest_ids:
+                ingest_str = ", ".join(str(i) for i in sorted(selected_ingest_ids))
+                self.status_bar.showMessage(f"Ingestion Session #{ingest_str} selected — Expand tree to select a Measurement or Tap.")
+            return
 
-            colors = self.plot_widget.set_tap_signals(taps_data)
-            self.tap_selector.populate_taps(taps_data, colors)
+        placeholders = ", ".join(["?"] * len(selected_meas_ids))
+        query = f"""
+            SELECT 
+                t.tap_id,
+                COALESCE(m.rate_hz, 500000.0) AS rate_hz,
+                COALESCE(m.delay_us, 0.0) AS delay_us,
+                s.ch1_samples,
+                s.ch2_samples
+            FROM taps t
+            LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
+            LEFT JOIN tap_signals s ON t.tap_id = s.tap_id
+            WHERE t.meas_id IN ({placeholders})
+            ORDER BY t.tap_id ASC
+        """
+        meas_id_list = [int(m) for m in sorted(selected_meas_ids)]
+        rows = self.conn.execute(query, meas_id_list).fetchall()
+        taps_data = []
+        for r in rows:
+            taps_data.append({
+                "tap_id": r[0],
+                "rate_hz": r[1],
+                "delay_us": r[2],
+                "ch1_samples": r[3] if r[3] else [],
+                "ch2_samples": r[4] if r[4] else [],
+            })
 
-            meas_str = ", ".join(str(m) for m in meas_id_list[:3])
-            if len(meas_id_list) > 3:
-                meas_str += f" (+{len(meas_id_list) - 3} more)"
-            self.status_bar.showMessage(
-                f"Measurement Session(s) {meas_str} selected — Overlaid {len(taps_data)} tap signals"
-            )
+        colors = self.plot_widget.set_tap_signals(taps_data)
+        self.tap_selector.populate_taps(taps_data, colors)
+
+        meas_str = ", ".join(str(m) for m in meas_id_list[:3])
+        if len(meas_id_list) > 3:
+            meas_str += f" (+{len(meas_id_list) - 3} more)"
+        self.status_bar.showMessage(
+            f"Measurement Session(s) {meas_str} selected — Overlaid {len(taps_data)} tap signals"
+        )
 
         self.plot_widget.highlight_taps(selected_tap_ids)
 
