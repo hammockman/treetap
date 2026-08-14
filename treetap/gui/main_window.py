@@ -29,7 +29,7 @@ from PyQt6.QtWidgets import (
     QDialog,
 )
 from PyQt6.QtCore import Qt, QSortFilterProxyModel, QItemSelection, QPoint
-from PyQt6.QtGui import QAction, QIcon, QPalette, QColor
+from PyQt6.QtGui import QAction, QIcon, QPalette, QColor, QStandardItem
 
 from treetap.backend.connection import get_connection
 from treetap.backend.repository import TreeTapRepository

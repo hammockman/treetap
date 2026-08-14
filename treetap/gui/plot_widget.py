@@ -180,12 +180,14 @@ class TapPlotWidget(QWidget):
 
     def highlight_taps(self, selected_tap_ids: set) -> None:
         """
-        Highlights selected tap(s) with wider, fully opaque lines (width=2.5, alpha=255)
-        and brings them to the front (zValue=10).
-        Lowers opacity and line width (width=1.0, alpha=65) for non-selected tap traces.
+        Highlights selected tap(s).
+        - If an entire measurement session (multiple taps) is selected: Overlays all signals cleanly with moderate transparency (width=1.5, alpha=160, Z=5) so individual peaks and waveforms blend visually.
+        - If a single tap is selected: Thick, fully opaque (width=2.5, alpha=255, Z=10); background taps are faint (width=1.0, alpha=65, Z=1).
+        - If no taps are selected: All signals are displayed in standard style (width=1.5, alpha=220, Z=1).
         """
         self.highlighted_taps = set(selected_tap_ids)
         has_highlight = len(self.highlighted_taps) > 0
+        all_taps_highlighted = len(self.highlighted_taps) > 1 and len(self.highlighted_taps) >= len(self.plot_curves)
 
         CH1_BASE = QColor("#00A000")
         CH2_BASE = QColor("#D32F2F")
@@ -201,8 +203,16 @@ class TapPlotWidget(QWidget):
                 c2.setAlpha(220)
                 width = 1.5
                 z_val = 1
+            elif all_taps_highlighted and is_selected:
+                # All taps in measurement selected: semi-transparent overlay so all waveforms blend
+                c1 = QColor(CH1_BASE)
+                c2 = QColor(CH2_BASE)
+                c1.setAlpha(160)
+                c2.setAlpha(160)
+                width = 1.5
+                z_val = 5
             elif is_selected:
-                # Highlighted tap: thick, 100% opaque, top Z-layer
+                # Single highlighted tap: thick, 100% opaque, top Z-layer
                 c1 = QColor(CH1_BASE)
                 c2 = QColor(CH2_BASE)
                 c1.setAlpha(255)
@@ -210,7 +220,7 @@ class TapPlotWidget(QWidget):
                 width = 2.5
                 z_val = 10
             else:
-                # De-emphasized tap: thin, ~25% opacity, bottom Z-layer
+                # De-emphasized background tap: thin, ~25% opacity, bottom Z-layer
                 c1 = QColor(CH1_BASE)
                 c2 = QColor(CH2_BASE)
                 c1.setAlpha(65)
