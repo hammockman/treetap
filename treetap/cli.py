@@ -17,7 +17,7 @@ def main() -> None:
 
     # gui subcommand
     gui_parser = subparsers.add_parser("gui", help="Launch PyQt6 GUI visualizer")
-    gui_parser.add_argument("--db", default="treetap.duckdb", help="DuckDB database file path")
+    gui_parser.add_argument("--db", default=None, help="DuckDB database file path")
 
     # v2 subcommand
     v2_parser = subparsers.add_parser("v2", help="Version 2 file & archive management")
@@ -35,7 +35,7 @@ def main() -> None:
 
     # Default to GUI when double-clicked or called without subcommands
     if args.command == "gui" or args.command is None:
-        db_path = getattr(args, "db", "treetap.duckdb") or "treetap.duckdb"
+        db_path = getattr(args, "db", None)
         try:
             from treetap.gui import launch_gui
             launch_gui(db_path=db_path)

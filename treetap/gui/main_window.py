@@ -28,7 +28,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QDialog,
 )
-from PyQt6.QtCore import Qt, QSortFilterProxyModel, QItemSelection, QPoint
+from PyQt6.QtCore import Qt, QSortFilterProxyModel, QItemSelection, QPoint, QSettings
 from PyQt6.QtGui import QAction, QIcon, QPalette, QColor, QStandardItem
 
 from treetap.backend.connection import get_connection
@@ -46,8 +46,18 @@ from treetap.v2.ingest import ingest_v2_directory
 
 
 class TreeTapMainWindow(QMainWindow):
-    def __init__(self, db_path: str = "treetap.duckdb"):
+    def __init__(self, db_path: Optional[str] = None):
         super().__init__()
+
+        settings = QSettings("TreeTap", "TreeTapSignals")
+        saved_db = settings.value("last_db_path", None)
+
+        if not db_path or db_path == "treetap.duckdb":
+            if saved_db and os.path.exists(str(saved_db)):
+                db_path = str(saved_db)
+            else:
+                db_path = "treetap.duckdb"
+
         self.db_path = db_path
         self.conn: Optional[duckdb.DuckDBPyConnection] = None
         self.hidden_columns: List[int] = []
@@ -260,6 +270,11 @@ class TreeTapMainWindow(QMainWindow):
                 init_schema(self.conn)
             except Exception:
                 pass
+
+            # Save successfully connected database path to QSettings
+            if os.path.exists(db_path):
+                settings = QSettings("TreeTap", "TreeTapSignals")
+                settings.setValue("last_db_path", os.path.abspath(db_path))
 
             self.update_window_title()
             self.table_model.load_data_from_db(self.conn)

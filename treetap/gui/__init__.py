@@ -2,12 +2,12 @@
 TreeTap PyQt6 GUI Package.
 """
 
-import sys
+from typing import Optional
 from PyQt6.QtWidgets import QApplication
 from treetap.gui.main_window import TreeTapMainWindow
 
 
-def launch_gui(db_path: str = "treetap.duckdb") -> None:
+def launch_gui(db_path: Optional[str] = None) -> None:
     """
     Launches the TreeTap PyQt6 Graphical User Interface.
     """
