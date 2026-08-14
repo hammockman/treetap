@@ -488,9 +488,14 @@ class TreeTapMainWindow(QMainWindow):
 
         tap_ids = []
         meas_ids = set()
+        ingest_ids = set()
         source_files: List[Tuple[int, str]] = []
 
         def _collect_context_node(item: QStandardItem) -> None:
+            ing_id = item.data(TreeTapTreeModel.INGEST_ID_ROLE)
+            if ing_id is not None:
+                ingest_ids.add(int(ing_id))
+
             meas_id = item.data(TreeTapTreeModel.MEAS_ID_ROLE)
             if meas_id is not None:
                 meas_ids.add(int(meas_id))
@@ -518,6 +523,25 @@ class TreeTapMainWindow(QMainWindow):
 
         menu = QMenu(self.tree_view)
 
+        if ingest_ids and self.conn:
+            target_ingest_id = sorted(list(ingest_ids))[0]
+            try:
+                row = self.conn.execute(
+                    "SELECT ingest_id, source, device_version FROM ingest_log WHERE ingest_id = ?",
+                    [target_ingest_id],
+                ).fetchone()
+                if row:
+                    ing_id, src_str, dev_ver = row[0], row[1] or "", row[2] or "v2"
+                    disp_src = src_str if len(src_str) <= 30 else (src_str[:27] + "...")
+                    repeat_action = QAction(f"🔄 Repeat Ingestion (Ingest #{ing_id} - {disp_src})...", self)
+                    repeat_action.triggered.connect(
+                        lambda _, iid=ing_id, src=src_str, dver=dev_ver: self.on_repeat_ingestion(iid, src, dver)
+                    )
+                    menu.addAction(repeat_action)
+                    menu.addSeparator()
+            except Exception:
+                pass
+
         if source_files:
             for tap_id, src_file in source_files[:3]:
                 view_src_action = QAction(f"Open Original Source File (Tap {tap_id})...", self)
@@ -534,6 +558,43 @@ class TreeTapMainWindow(QMainWindow):
         delete_meas_action = QAction(f"Delete Measurement Session(s) [Meas ID: {meas_str}]", self)
         delete_meas_action.triggered.connect(lambda: self.on_delete_measurements(meas_ids_list))
         menu.addAction(delete_meas_action)
+
+    def on_repeat_ingestion(self, ingest_id: int, source: str, device_version: str) -> None:
+        """
+        Triggers a re-ingestion workflow for the specified ingestion session.
+        - For V1 Serial: Pre-fills V1 Ingestion Dialog with target port.
+        - For V1 Log File: Ingests file or launches V1 Dialog.
+        - For V2 / FTP: Opens FtpIngestDialog or directory ingestion.
+        """
+        if not self.conn:
+            return
+
+        if source.startswith("serial_"):
+            port_name = source[7:]
+            dlg = V1IngestDialog(self, initial_port=port_name)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                self.refresh_views()
+        elif device_version == "v1":
+            if os.path.exists(source):
+                from treetap.v1.ingest import ingest_v1_data
+                try:
+                    res = ingest_v1_data(source, self.conn)
+                    QMessageBox.information(
+                        self,
+                        "Repeat Ingestion Successful",
+                        f"Re-ingested V1 log file '{os.path.basename(source)}'.\n\nLoaded {res.get('records_loaded', 0)} taps.",
+                    )
+                    self.refresh_views()
+                except Exception as e:
+                    QMessageBox.critical(self, "Ingestion Failed", f"Failed to re-ingest file:\n{str(e)}")
+            else:
+                dlg = V1IngestDialog(self)
+                if dlg.exec() == QDialog.DialogCode.Accepted:
+                    self.refresh_views()
+        else:
+            dlg = FtpIngestDialog(self, conn=self.conn)
+            if dlg.exec() == QDialog.DialogCode.Accepted:
+                self.refresh_views()
 
         menu.addSeparator()
         expand_action = QAction("Expand All", self)

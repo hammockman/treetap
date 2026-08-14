@@ -63,7 +63,7 @@ class SerialWorkerThread(QThread):
 
 
 class V1IngestDialog(QDialog):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_port: Optional[str] = None):
         super().__init__(parent)
         self.setWindowTitle("Ingest Version 1 TreeTap Data (Serial / File)")
         self.resize(680, 560)
@@ -83,6 +83,12 @@ class V1IngestDialog(QDialog):
         self.port_combo = QComboBox()
         self.port_combo.setEditable(True)  # Freeform entry for any custom port (/dev/ttyUSB0, COM3, etc.)
         self.populate_serial_ports()
+        if initial_port:
+            idx = self.port_combo.findText(initial_port)
+            if idx >= 0:
+                self.port_combo.setCurrentIndex(idx)
+            else:
+                self.port_combo.setCurrentText(initial_port)
         row1.addWidget(self.port_combo, stretch=1)
 
         btn_refresh_ports = QPushButton("Refresh Ports")
