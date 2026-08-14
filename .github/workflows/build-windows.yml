@@ -64,10 +64,21 @@ jobs:
         run: iscc installer.iss
 
       - name: Delete Previous Build Artifacts
-        uses: jimschubert/delete-artifacts-action@v1
-        with:
-          artifact_name: 'TreeTap-Windows-Setup'
-          min_bytes: '0'
+        shell: pwsh
+        run: |
+          try {
+            $artifacts = gh api "repos/${{ github.repository }}/actions/artifacts" | ConvertFrom-Json
+            foreach ($art in $artifacts.artifacts) {
+              if ($art.name -eq 'TreeTap-Windows-Setup') {
+                Write-Host "Deleting old artifact ID: $($art.id)"
+                gh api -X DELETE "repos/${{ github.repository }}/actions/artifacts/$($art.id)"
+              }
+            }
+          } catch {
+            Write-Host "No previous artifacts found or cleanup skipped: $_"
+          }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows Setup Installer Artifact
         uses: actions/upload-artifact@v4
