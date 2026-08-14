@@ -338,20 +338,19 @@ class TreeTapMainWindow(QMainWindow):
             return
 
         selected_tap_ids = set()
-        first_meas_id = None
+        selected_meas_ids = set()
 
         for proxy_idx in selected_indexes:
             source_idx = self.proxy_model.mapToSource(proxy_idx)
             row_data = self.table_model.get_row_data(source_idx.row())
             if row_data:
                 selected_tap_ids.add(int(row_data["tap_id"]))
-                if first_meas_id is None and row_data.get("meas_id") is not None:
-                    first_meas_id = int(row_data["meas_id"])
+                if row_data.get("meas_id") is not None:
+                    selected_meas_ids.add(int(row_data["meas_id"]))
 
-        if first_meas_id is not None and first_meas_id != self.current_meas_id:
-            self.current_meas_id = first_meas_id
-            self.plot_widget.clear_markers()
-            query = """
+        if selected_meas_ids:
+            placeholders = ", ".join(["?"] * len(selected_meas_ids))
+            query = f"""
                 SELECT 
                     t.tap_id,
                     COALESCE(m.rate_hz, 500000.0) AS rate_hz,
@@ -361,10 +360,11 @@ class TreeTapMainWindow(QMainWindow):
                 FROM taps t
                 LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
                 LEFT JOIN tap_signals s ON t.tap_id = s.tap_id
-                WHERE t.meas_id = ?
+                WHERE t.meas_id IN ({placeholders})
                 ORDER BY t.tap_id ASC
             """
-            rows = self.conn.execute(query, [int(first_meas_id)]).fetchall()
+            meas_id_list = [int(m) for m in sorted(selected_meas_ids)]
+            rows = self.conn.execute(query, meas_id_list).fetchall()
             taps_data = []
             for r in rows:
                 taps_data.append({
@@ -378,8 +378,11 @@ class TreeTapMainWindow(QMainWindow):
             colors = self.plot_widget.set_tap_signals(taps_data)
             self.tap_selector.populate_taps(taps_data, colors)
 
+            meas_str = ", ".join(str(m) for m in meas_id_list[:3])
+            if len(meas_id_list) > 3:
+                meas_str += f" (+{len(meas_id_list) - 3} more)"
             self.status_bar.showMessage(
-                f"Measurement ID {first_meas_id} selected — Overlaid {len(taps_data)} tap signals"
+                f"Measurement Session(s) {meas_str} selected — Overlaid {len(taps_data)} tap signals"
             )
 
         # Highlight selected tap trace(s) with wider, opaque line styling
@@ -395,13 +398,12 @@ class TreeTapMainWindow(QMainWindow):
             return
 
         selected_tap_ids = set()
-        first_meas_id = None
+        selected_meas_ids = set()
 
         def _collect_tree_node(item: QStandardItem) -> None:
-            nonlocal first_meas_id
             meas_id = item.data(TreeTapTreeModel.MEAS_ID_ROLE)
-            if first_meas_id is None and meas_id is not None:
-                first_meas_id = int(meas_id)
+            if meas_id is not None:
+                selected_meas_ids.add(int(meas_id))
 
             tid = item.data(TreeTapTreeModel.TAP_ID_ROLE)
             if tid is not None:
@@ -418,10 +420,9 @@ class TreeTapMainWindow(QMainWindow):
             if item:
                 _collect_tree_node(item)
 
-        if first_meas_id is not None and first_meas_id != self.current_meas_id:
-            self.current_meas_id = first_meas_id
-            self.plot_widget.clear_markers()
-            query = """
+        if selected_meas_ids:
+            placeholders = ", ".join(["?"] * len(selected_meas_ids))
+            query = f"""
                 SELECT 
                     t.tap_id,
                     COALESCE(m.rate_hz, 500000.0) AS rate_hz,
@@ -431,10 +432,11 @@ class TreeTapMainWindow(QMainWindow):
                 FROM taps t
                 LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
                 LEFT JOIN tap_signals s ON t.tap_id = s.tap_id
-                WHERE t.meas_id = ?
+                WHERE t.meas_id IN ({placeholders})
                 ORDER BY t.tap_id ASC
             """
-            rows = self.conn.execute(query, [int(first_meas_id)]).fetchall()
+            meas_id_list = [int(m) for m in sorted(selected_meas_ids)]
+            rows = self.conn.execute(query, meas_id_list).fetchall()
             taps_data = []
             for r in rows:
                 taps_data.append({
@@ -448,8 +450,11 @@ class TreeTapMainWindow(QMainWindow):
             colors = self.plot_widget.set_tap_signals(taps_data)
             self.tap_selector.populate_taps(taps_data, colors)
 
+            meas_str = ", ".join(str(m) for m in meas_id_list[:3])
+            if len(meas_id_list) > 3:
+                meas_str += f" (+{len(meas_id_list) - 3} more)"
             self.status_bar.showMessage(
-                f"Measurement ID {first_meas_id} selected — Overlaid {len(taps_data)} tap signals"
+                f"Measurement Session(s) {meas_str} selected — Overlaid {len(taps_data)} tap signals"
             )
 
         self.plot_widget.highlight_taps(selected_tap_ids)

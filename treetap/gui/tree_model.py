@@ -85,6 +85,9 @@ class TreeTapTreeModel(QStandardItemModel):
                 QStandardItem(""),
                 QStandardItem(main_src),
             ]
+            for col_item in ingest_row:
+                col_item.setData("ingest", self.ITEM_TYPE_ROLE)
+                col_item.setData(ingest_id, self.INGEST_ID_ROLE)
 
             # 2. Group by local_meas_id (Level 2: Measurement Nodes under Ingest Node)
             meas_grouped = ingest_group.groupby("meas_id", sort=False)
@@ -101,20 +104,8 @@ class TreeTapTreeModel(QStandardItemModel):
 
                 # Simplified Measurement Node (just number!)
                 item_meas = QStandardItem(f"Meas {local_meas_id}")
-                item_meas.setData("meas", self.ITEM_TYPE_ROLE)
-                item_meas.setData(g_meas_id, self.MEAS_ID_ROLE)
-                item_meas.setData(ingest_id, self.INGEST_ID_ROLE)
-                item_meas.setData(g_meas_id, Qt.ItemDataRole.UserRole)
-
                 item_note = QStandardItem(meas_note)
-                item_note.setData("meas", self.ITEM_TYPE_ROLE)
-                item_note.setData(g_meas_id, self.MEAS_ID_ROLE)
-                item_note.setData(ingest_id, self.INGEST_ID_ROLE)
-
                 item_count = QStandardItem(f"{n_meas_taps} tap(s)")
-                item_count.setData("meas", self.ITEM_TYPE_ROLE)
-                item_count.setData(g_meas_id, self.MEAS_ID_ROLE)
-                item_count.setData(ingest_id, self.INGEST_ID_ROLE)
 
                 speed_str = f"{median_speed:.2f}" if median_speed is not None else ""
                 item_speed = QStandardItem(speed_str)
@@ -133,6 +124,11 @@ class TreeTapTreeModel(QStandardItemModel):
                     item_src,
                 ]
 
+                for col_item in meas_row:
+                    col_item.setData("meas", self.ITEM_TYPE_ROLE)
+                    col_item.setData(g_meas_id, self.MEAS_ID_ROLE)
+                    col_item.setData(ingest_id, self.INGEST_ID_ROLE)
+
                 # 3. Child rows (Level 3: Taps under Measurement Node)
                 for _, row in meas_group.iterrows():
                     local_tap_id = int(row["tap_id"])
@@ -146,20 +142,8 @@ class TreeTapTreeModel(QStandardItemModel):
                     source_file = str(row["source_file"]) if "source_file" in row and pd.notnull(row["source_file"]) else ""
 
                     c_name = QStandardItem(f"  Tap {local_tap_id}")
-                    c_name.setData("tap", self.ITEM_TYPE_ROLE)
-                    c_name.setData(g_meas_id, self.MEAS_ID_ROLE)
-                    c_name.setData(g_tap_id, self.TAP_ID_ROLE)
-                    c_name.setData(ingest_id, self.INGEST_ID_ROLE)
-                    c_name.setData(source_file, self.SOURCE_FILE_ROLE)
-
                     c_note = QStandardItem("")
-
                     c_tid = QStandardItem(str(local_tap_id))
-                    c_tid.setData("tap", self.ITEM_TYPE_ROLE)
-                    c_tid.setData(g_meas_id, self.MEAS_ID_ROLE)
-                    c_tid.setData(g_tap_id, self.TAP_ID_ROLE)
-                    c_tid.setData(ingest_id, self.INGEST_ID_ROLE)
-
                     c_time = QStandardItem(tap_time)
                     c_sep = QStandardItem(sep_cm)
                     c_speed = QStandardItem(speed_us)
@@ -169,6 +153,13 @@ class TreeTapTreeModel(QStandardItemModel):
                         c.setTextAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
 
                     child_row = [c_name, c_note, c_tid, c_time, c_sep, c_speed, c_src]
+                    for col_item in child_row:
+                        col_item.setData("tap", self.ITEM_TYPE_ROLE)
+                        col_item.setData(g_meas_id, self.MEAS_ID_ROLE)
+                        col_item.setData(g_tap_id, self.TAP_ID_ROLE)
+                        col_item.setData(ingest_id, self.INGEST_ID_ROLE)
+                        col_item.setData(source_file, self.SOURCE_FILE_ROLE)
+
                     item_meas.appendRow(child_row)
 
                 item_ingest.appendRow(meas_row)
