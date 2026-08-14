@@ -375,7 +375,8 @@ class TreeTapMainWindow(QMainWindow):
                     COALESCE(m.rate_hz, 500000.0) AS rate_hz,
                     COALESCE(m.delay_us, 0.0) AS delay_us,
                     s.ch1_samples,
-                    s.ch2_samples
+                    s.ch2_samples,
+                    COALESCE(t.separation_cm, 100.0) AS separation_cm
                 FROM taps t
                 LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
                 LEFT JOIN tap_signals s ON t.tap_id = s.tap_id
@@ -392,6 +393,7 @@ class TreeTapMainWindow(QMainWindow):
                     "delay_us": r[2],
                     "ch1_samples": r[3] if r[3] else [],
                     "ch2_samples": r[4] if r[4] else [],
+                    "separation_cm": r[5] if len(r) > 5 and r[5] is not None else 100.0,
                 })
 
             colors = self.plot_widget.set_tap_signals(taps_data)
@@ -481,7 +483,8 @@ class TreeTapMainWindow(QMainWindow):
                 COALESCE(m.rate_hz, 500000.0) AS rate_hz,
                 COALESCE(m.delay_us, 0.0) AS delay_us,
                 s.ch1_samples,
-                s.ch2_samples
+                s.ch2_samples,
+                COALESCE(t.separation_cm, 100.0) AS separation_cm
             FROM taps t
             LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
             LEFT JOIN tap_signals s ON t.tap_id = s.tap_id
@@ -498,6 +501,7 @@ class TreeTapMainWindow(QMainWindow):
                 "delay_us": r[2],
                 "ch1_samples": r[3] if r[3] else [],
                 "ch2_samples": r[4] if r[4] else [],
+                "separation_cm": r[5] if len(r) > 5 and r[5] is not None else 100.0,
             })
 
         n_plotted = sum(1 for t in taps_data if len(t.get("ch1_samples", [])) > 0 or len(t.get("ch2_samples", [])) > 0)

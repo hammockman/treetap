@@ -118,11 +118,16 @@ class TapPlotWidget(QWidget):
     ) -> Dict[int, QColor]:
         """
         Populates plot with overlaid signals for the provided list of tap dictionaries.
-        Each tap dict should have: tap_id, rate_hz, delay_us, ch1_samples, ch2_samples.
+        Each tap dict should have: tap_id, rate_hz, delay_us, ch1_samples, ch2_samples, separation_cm.
         """
         self.clear_plots()
         self.show_ch1 = show_ch1
         self.show_ch2 = show_ch2
+
+        if taps_data:
+            sep_val = taps_data[0].get("separation_cm", 100.0)
+            if sep_val and float(sep_val) > 0:
+                self.current_separation_cm = float(sep_val)
 
         if visible_taps is None:
             self.visible_taps = {t["tap_id"] for t in taps_data}
@@ -261,21 +266,35 @@ class TapPlotWidget(QWidget):
                 curves["ch2"].setVisible(is_tap_visible and self.show_ch2)
 
     def reset_view(self) -> None:
+        """
+        Resets the plot view bounds to fit all visible waveform curves with a clean margin.
+        """
         vb = self.plot_widget.getViewBox()
-        vb.setLimits(xMin=None, xMax=None, yMin=None, yMax=None)
+        if not self.plot_curves:
+            vb.enableAutoRange()
+            return
 
         x_min, x_max = None, None
         y_min, y_max = None, None
 
-        for item in self.plot_widget.plotItem.items:
-            if isinstance(item, pg.PlotDataItem) and item.isVisible():
-                x_data, y_data = item.getData()
-                if x_data is not None and len(x_data) > 0:
-                    xmin_i, xmax_i = float(np.min(x_data)), float(np.max(x_data))
+        for tap_id, curves in self.plot_curves.items():
+            if tap_id not in self.visible_taps:
+                continue
+
+            for ch_key in ("ch1", "ch2"):
+                if ch_key in curves:
+                    curve = curves[ch_key]
+                    if not curve.isVisible():
+                        continue
+                    x_data, y_data = curve.getData()
+                    if x_data is None or len(x_data) == 0:
+                        continue
+
+                    xmin_i, xmax_i = np.min(x_data), np.max(x_data)
+                    ymin_i, ymax_i = np.min(y_data), np.max(y_data)
+
                     x_min = xmin_i if x_min is None else min(x_min, xmin_i)
                     x_max = xmax_i if x_max is None else max(x_max, xmax_i)
-                if y_data is not None and len(y_data) > 0:
-                    ymin_i, ymax_i = float(np.min(y_data)), float(np.max(y_data))
                     y_min = ymin_i if y_min is None else min(y_min, ymin_i)
                     y_max = ymax_i if y_max is None else max(y_max, ymax_i)
 
@@ -306,22 +325,33 @@ class TapPlotWidget(QWidget):
 
     def update_marker_display(self) -> None:
         """
-        Updates the top info label with cursor coordinates and marker delta-t.
+        Updates the top info label with cursor coordinates, marker delta-t, and calculated speed (in km/s).
         """
         base_str = self._last_cursor_str
+        sep_cm = getattr(self, "current_separation_cm", 100.0)
+
         if not self.marker_lines:
             self.info_label.setText(base_str)
             return
 
         if len(self.marker_lines) == 1:
             x1 = self.marker_lines[0].value()
-            self.info_label.setText(f"{base_str}  |  M1 = {x1:.1f} μs")
+            cursor_x = getattr(self, "_last_mouse_x", None)
+            if cursor_x is not None:
+                delta_t = abs(cursor_x - x1)
+                speed_kms = (sep_cm * 10.0) / delta_t if delta_t > 0 else 0.0
+                self.info_label.setText(
+                    f"{base_str}  |  M1 = {x1:.1f} μs  |  Δt = {delta_t:.1f} μs  |  <b>Speed = {speed_kms:.2f} km/s</b> ({sep_cm:.1f} cm)"
+                )
+            else:
+                self.info_label.setText(f"{base_str}  |  M1 = {x1:.1f} μs")
         elif len(self.marker_lines) >= 2:
             x1 = self.marker_lines[0].value()
             x2 = self.marker_lines[1].value()
             delta_t = abs(x2 - x1)
+            speed_kms = (sep_cm * 10.0) / delta_t if delta_t > 0 else 0.0
             self.info_label.setText(
-                f"{base_str}  |  M1 = {x1:.1f} μs, M2 = {x2:.1f} μs  |  Δt = {delta_t:.1f} μs"
+                f"{base_str}  |  M1 = {x1:.1f} μs, M2 = {x2:.1f} μs  |  Δt = {delta_t:.1f} μs  |  <b>Speed = {speed_kms:.2f} km/s</b> ({sep_cm:.1f} cm)"
             )
 
     def on_plot_clicked(self, evt: Any) -> None:
@@ -377,6 +407,7 @@ class TapPlotWidget(QWidget):
             pos = pos[0]
         if self.plot_widget.sceneBoundingRect().contains(pos):
             mouse_point = self.plot_widget.plotItem.vb.mapSceneToView(pos)
+            self._last_mouse_x = float(mouse_point.x())
             self.v_line.setPos(mouse_point.x())
             self.h_line.setPos(mouse_point.y())
             self._last_cursor_str = f"Cursor: X = {mouse_point.x():.1f} μs, Y = {mouse_point.y():.1f}"
