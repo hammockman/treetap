@@ -21,7 +21,7 @@ class TreeTapTreeModel(QStandardItemModel):
         "Tap ID",
         "Tap Time",
         "Separation (cm)",
-        "Speed (us)",
+        "ToF (us)",
         "Source File",
     ]
 

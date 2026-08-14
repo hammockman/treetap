@@ -16,7 +16,7 @@ class TreeTapTableModel(QAbstractTableModel):
         "Tap ID",
         "Tap Time",
         "Separation (cm)",
-        "Speed (μs)",
+        "ToF (us)",
         "Channels",
         "Samples",
         "Rate (Hz)",
