@@ -21,20 +21,46 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Install UPX Packer
+        run: choco install upx --no-progress -y
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install duckdb pandas pyarrow PyQt6 pyqtgraph pyserial pyinstaller
 
-      - name: Build executable with PyInstaller
+      - name: Build lightweight executable with PyInstaller & UPX
         run: |
           pyinstaller --name="TreeTap" `
             --windowed `
             --noconfirm `
+            --exclude-module PyQt6.QtWebEngineCore `
+            --exclude-module PyQt6.QtWebEngineWidgets `
+            --exclude-module PyQt6.QtWebEngineQuick `
+            --exclude-module PyQt6.QtQml `
+            --exclude-module PyQt6.QtQuick `
+            --exclude-module PyQt6.QtQuickWidgets `
+            --exclude-module PyQt6.Qt3D `
+            --exclude-module PyQt6.QtDesigner `
+            --exclude-module PyQt6.QtSql `
+            --exclude-module PyQt6.QtMultimedia `
+            --exclude-module PyQt6.QtBluetooth `
+            --exclude-module PyQt6.QtSensors `
+            --exclude-module PyQt6.QtPositioning `
+            --exclude-module PyQt6.QtLocation `
+            --exclude-module PyQt6.QtHelp `
+            --exclude-module PyQt6.QtPdf `
+            --exclude-module PyQt6.QtSpatialAudio `
+            --exclude-module PyQt6.QtTest `
+            --exclude-module tkinter `
+            --exclude-module matplotlib `
+            --exclude-module scipy `
+            --exclude-module IPython `
+            --exclude-module PIL `
             --add-data "treetap/gui;treetap/gui" `
             treetap/cli.py
 
-      - name: Upload Windows Executable Artifact
+      - name: Upload Optimized Windows Executable Artifact
         uses: actions/upload-artifact@v4
         with:
           name: TreeTap-Windows-build
