@@ -663,6 +663,17 @@ class TreeTapMainWindow(QMainWindow):
         delete_meas_action.triggered.connect(lambda: self.on_delete_measurements(meas_ids_list))
         menu.addAction(delete_meas_action)
 
+        menu.addSeparator()
+        expand_action = QAction("Expand All", self)
+        expand_action.triggered.connect(self.tree_view.expandAll)
+        menu.addAction(expand_action)
+
+        collapse_action = QAction("Collapse All", self)
+        collapse_action.triggered.connect(self.tree_view.collapseAll)
+        menu.addAction(collapse_action)
+
+        menu.exec(self.tree_view.viewport().mapToGlobal(pos))
+
     def on_repeat_ingestion(self, ingest_id: int, source: str, device_version: str) -> None:
         """
         Triggers a re-ingestion workflow for the specified ingestion session.
@@ -699,17 +710,6 @@ class TreeTapMainWindow(QMainWindow):
             dlg = FtpIngestDialog(self, conn=self.conn)
             if dlg.exec() == QDialog.DialogCode.Accepted:
                 self.refresh_views()
-
-        menu.addSeparator()
-        expand_action = QAction("Expand All", self)
-        expand_action.triggered.connect(self.tree_view.expandAll)
-        menu.addAction(expand_action)
-
-        collapse_action = QAction("Collapse All", self)
-        collapse_action.triggered.connect(self.tree_view.collapseAll)
-        menu.addAction(collapse_action)
-
-        menu.exec(self.tree_view.viewport().mapToGlobal(pos))
 
     def on_create_new_database(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
