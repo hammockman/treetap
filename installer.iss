@@ -8,6 +8,9 @@ UninstallDisplayIcon={app}\TreeTap.exe
 OutputBaseFilename=TreeTapSetup
 Compression=lzma2
 SolidCompression=yes
+PrivilegesRequired=lowest
+DisableProgramGroupPage=yes
+WizardStyle=modern
 
 [Files]
 Source: "dist\TreeTap\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
