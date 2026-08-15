@@ -275,17 +275,24 @@ class TreeTapMainWindow(QMainWindow):
     def connect_db(self, db_path: str) -> None:
         try:
             if self.conn:
-                self.conn.close()
+                try:
+                    self.conn.close()
+                except Exception:
+                    pass
             self.db_path = db_path
             self.current_meas_id = None
             self.is_read_only = False
 
             try:
                 self.conn = duckdb.connect(database=db_path, read_only=False)
-            except duckdb.Error:
-                # Fall back to read-only mode if locked by another process
-                self.conn = duckdb.connect(database=db_path, read_only=True)
-                self.is_read_only = True
+            except Exception:
+                # Fall back to read-only mode if locked by another process or on Windows
+                try:
+                    self.conn = duckdb.connect(database=db_path, read_only=True)
+                    self.is_read_only = True
+                except Exception as err:
+                    QMessageBox.critical(self, "Database Error", f"Failed to open DuckDB database '{db_path}':\n{err}")
+                    return
 
             # Ensure schema (tables & views) is initialized
             try:
@@ -294,9 +301,12 @@ class TreeTapMainWindow(QMainWindow):
                 pass
 
             # Save successfully connected database path to QSettings
-            if os.path.exists(db_path):
-                settings = QSettings("TreeTap", "TreeTapSignals")
-                settings.setValue("last_db_path", os.path.abspath(db_path))
+            try:
+                if os.path.exists(db_path):
+                    settings = QSettings("TreeTap", "TreeTapSignals")
+                    settings.setValue("last_db_path", os.path.abspath(db_path))
+            except Exception:
+                pass
 
             self.update_window_title()
             self.table_model.load_data_from_db(self.conn)
@@ -314,7 +324,7 @@ class TreeTapMainWindow(QMainWindow):
             header_tree.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
             for col_i in range(len(TreeTapTreeModel.HEADERS)):
                 self.tree_view.resizeColumnToContents(col_i)
-            self.tree_view.expandAll()
+            self.tree_view.expandToDepth(0)
 
             mode_str = " (Read-Only Mode)" if self.is_read_only else ""
             self.db_label.setText(f"<b>Database:</b> {os.path.basename(self.db_path)}{mode_str}")

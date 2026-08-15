@@ -60,7 +60,6 @@ class TreeTapSplashScreen(QSplashScreen):
 
         painter.end()
         super().__init__(pixmap)
-        self.setWindowFlag(Qt.WindowType.WindowStaysOnTopHint)
 
     def set_status(self, message: str) -> None:
         """

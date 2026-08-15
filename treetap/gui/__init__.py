@@ -19,12 +19,25 @@ def launch_gui(db_path: Optional[str] = None) -> None:
     splash.show()
     splash.set_status("Initializing TreeTap application...")
 
-    splash.set_status("Connecting to DuckDB database & loading views...")
-    window = TreeTapMainWindow(db_path=db_path)
+    try:
+        splash.set_status("Connecting to DuckDB database & loading views...")
+        window = TreeTapMainWindow(db_path=db_path)
 
-    splash.set_status("Opening main window...")
-    window.show()
-    splash.finish(window)
+        splash.set_status("Opening main window...")
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        splash.finish(window)
+        splash.close()
+    except Exception as err:
+        if "splash" in locals():
+            try:
+                splash.close()
+            except Exception:
+                pass
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.critical(None, "Startup Error", f"An error occurred while launching TreeTap:\n{err}")
+        sys.exit(1)
 
     sys.exit(app.exec())
 
