@@ -55,6 +55,15 @@ class FtpDownloadWorker(QThread):
         self.use_tls = use_tls
         self.passive = passive
         self.temp_dir: Optional[str] = None
+        self.is_cancelled = False
+
+    def stop(self) -> None:
+        self.is_cancelled = True
+        self.requestInterruption()
+        self.quit()
+        if not self.wait(1000):
+            self.terminate()
+            self.wait(200)
 
     def run(self) -> None:
         try:
@@ -69,6 +78,8 @@ class FtpDownloadWorker(QThread):
             )
 
             def on_progress(idx: int, total: int, fname: str) -> None:
+                if self.isInterruptionRequested() or self.is_cancelled:
+                    raise InterruptedError("Download cancelled by user.")
                 self.progress_updated.emit(idx, total, fname)
 
             downloaded = downloader.download_v2_folder(
@@ -76,11 +87,16 @@ class FtpDownloadWorker(QThread):
                 local_target_dir=self.temp_dir,
                 progress_callback=on_progress,
             )
-            self.download_finished.emit(self.temp_dir, downloaded)
+            if not self.isInterruptionRequested() and not self.is_cancelled:
+                self.download_finished.emit(self.temp_dir, downloaded)
+        except InterruptedError:
+            if self.temp_dir and os.path.exists(self.temp_dir):
+                shutil.rmtree(self.temp_dir, ignore_errors=True)
         except Exception as e:
             if self.temp_dir and os.path.exists(self.temp_dir):
                 shutil.rmtree(self.temp_dir, ignore_errors=True)
-            self.download_failed.emit(str(e))
+            if not self.isInterruptionRequested() and not self.is_cancelled:
+                self.download_failed.emit(str(e))
 
 
 class FtpIngestDialog(QDialog):
@@ -252,3 +268,29 @@ class FtpIngestDialog(QDialog):
         self.edit_password.setEnabled(True)
 
         QMessageBox.critical(self, "FTP Download Error", f"Failed to download files from FTP server:\n\n{error_msg}")
+
+    def stop_worker(self) -> None:
+        if self.worker:
+            try:
+                self.worker.progress_updated.disconnect()
+                self.worker.download_finished.disconnect()
+                self.worker.download_failed.disconnect()
+            except Exception:
+                pass
+            if self.worker.isRunning():
+                self.worker.stop()
+            self.worker = None
+
+    def reject(self) -> None:
+        self.stop_worker()
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+            self.temp_dir = None
+        super().reject()
+
+    def closeEvent(self, event) -> None:
+        self.stop_worker()
+        if self.temp_dir and os.path.exists(self.temp_dir):
+            shutil.rmtree(self.temp_dir, ignore_errors=True)
+            self.temp_dir = None
+        event.accept()

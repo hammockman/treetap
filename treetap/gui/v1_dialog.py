@@ -382,3 +382,7 @@ class V1IngestDialog(QDialog):
     def reject(self) -> None:
         self.stop_listening()
         super().reject()
+
+    def closeEvent(self, event) -> None:
+        self.stop_listening()
+        event.accept()
