@@ -6,10 +6,6 @@ import argparse
 import sys
 import json
 
-from treetap.v2.ingest import ingest_v2_directory
-from treetap.backend.connection import get_connection
-from treetap.backend.repository import TreeTapRepository
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="TreeTap Acoustic Data Management CLI")
@@ -52,11 +48,14 @@ def main() -> None:
                 pass
             sys.exit(1)
     elif args.command == "v2" and args.v2_command == "ingest":
+        from treetap.v2.ingest import ingest_v2_directory
         print(f"Starting v2 ingestion from '{args.data_dir}' into '{args.db}'...")
         stats = ingest_v2_directory(data_dir=args.data_dir, db_path=args.db)
         print("Ingestion completed:")
         print(json.dumps(stats, indent=2))
     elif args.command == "info":
+        from treetap.backend.connection import get_connection
+        from treetap.backend.repository import TreeTapRepository
         with get_connection(db_path=args.db, read_only=True) as conn:
             repo = TreeTapRepository(conn)
             stats = repo.get_summary_stats()

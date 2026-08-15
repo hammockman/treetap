@@ -33,11 +33,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install duckdb pandas pyarrow PyQt6 pyqtgraph pyserial pyinstaller
 
-      - name: Build lightweight executable with PyInstaller & UPX
+      - name: Build fast-launching executable with PyInstaller
         run: |
           pyinstaller --name="TreeTap" `
             --windowed `
             --noconfirm `
+            --noupx `
             --icon="assets/app.ico" `
             --add-data "assets;assets" `
             --add-data "treetap/gui;treetap/gui" `
