@@ -46,7 +46,10 @@ def ingest_v2_directory(
 
     close_conn_when_done = False
     if conn is None:
-        conn = get_connection(db_path=db_path)
+        import duckdb
+        from treetap.backend.schema import init_schema
+        conn = duckdb.connect(database=db_path, read_only=False)
+        init_schema(conn)
         close_conn_when_done = True
 
     try:
