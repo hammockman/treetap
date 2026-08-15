@@ -23,10 +23,12 @@ def ingest_v1_data(
     source_name: str = "v1.down",
     separation_cm: float = 0.0,
     conn: Optional[Any] = None,
+    target_ingest_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Ingests Version 1 TreeTap ASCII text (from serial stream or file) into the DuckDB repository.
     Includes SHA-256 data fingerprinting and duplicate payload short-circuiting.
+    If target_ingest_id is specified, appends records into that existing ingestion.
     """
     cleaned_text = v1_text.strip()
     if not cleaned_text:
@@ -66,39 +68,44 @@ def ingest_v1_data(
     try:
         repo = TreeTapRepository(conn)
 
-        # Check for exact duplicate import payload
-        dup = repo.check_duplicate_ingest(data_hash)
-        if dup:
-            logger.info(f"Duplicate V1 payload detected (data_hash={data_hash[:10]}). Previous ingest_id={dup['ingest_id']}")
-            repo.log_ingestion(
-                device_version="v1",
-                source=source_name,
-                status="SKIPPED_DUPLICATE",
-                records_loaded=0,
-                details=f"Duplicate payload matching ingest_id #{dup['ingest_id']} ({dup['source']} on {dup['ingest_time']})",
-                data_hash=data_hash,
-            )
-            return {
-                "status": "SKIPPED_DUPLICATE",
-                "previous_ingest": dup,
-                "inserted_measurements": 0,
-                "skipped_measurements": sum(1 for _ in parsed_sessions),
-                "inserted_taps": 0,
-                "skipped_taps": sum(len(tuples) for _, tuples in parsed_sessions),
-                "inserted_signals": 0,
-                "skipped_signals": sum(len(tuples) for _, tuples in parsed_sessions),
-                "total_taps": sum(len(tuples) for _, tuples in parsed_sessions),
-            }
+        # Check for exact duplicate import payload (skip check if appending to target_ingest_id)
+        if target_ingest_id is None:
+            dup = repo.check_duplicate_ingest(data_hash)
+            if dup:
+                logger.info(f"Duplicate V1 payload detected (data_hash={data_hash[:10]}). Previous ingest_id={dup['ingest_id']}")
+                repo.log_ingestion(
+                    device_version="v1",
+                    source=source_name,
+                    status="SKIPPED_DUPLICATE",
+                    records_loaded=0,
+                    details=f"Duplicate payload matching ingest_id #{dup['ingest_id']} ({dup['source']} on {dup['ingest_time']})",
+                    data_hash=data_hash,
+                )
+                return {
+                    "status": "SKIPPED_DUPLICATE",
+                    "previous_ingest": dup,
+                    "inserted_measurements": 0,
+                    "skipped_measurements": sum(1 for _ in parsed_sessions),
+                    "inserted_taps": 0,
+                    "skipped_taps": sum(len(tuples) for _, tuples in parsed_sessions),
+                    "inserted_signals": 0,
+                    "skipped_signals": sum(len(tuples) for _, tuples in parsed_sessions),
+                    "total_taps": sum(len(tuples) for _, tuples in parsed_sessions),
+                }
 
         total_records = sum(len(tuples) for _, tuples in parsed_sessions)
-        ingest_id = repo.log_ingestion(
-            device_version="v1",
-            source=source_name,
-            status="COMPLETED",
-            records_loaded=total_records,
-            details=f"V1 Ingest ({source_name}): {total_records} taps",
-            data_hash=data_hash,
-        )
+        if target_ingest_id is not None:
+            ingest_id = target_ingest_id
+            repo.update_ingest_log(ingest_id, added_records=total_records, status="COMPLETED")
+        else:
+            ingest_id = repo.log_ingestion(
+                device_version="v1",
+                source=source_name,
+                status="COMPLETED",
+                records_loaded=total_records,
+                details=f"V1 Ingest ({source_name}): {total_records} taps",
+                data_hash=data_hash,
+            )
 
         inserted_meas = 0
         skipped_meas = 0

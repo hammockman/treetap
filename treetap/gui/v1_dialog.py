@@ -63,11 +63,12 @@ class SerialWorkerThread(QThread):
 
 
 class V1IngestDialog(QDialog):
-    def __init__(self, parent=None, initial_port: Optional[str] = None):
+    def __init__(self, parent=None, initial_port: Optional[str] = None, target_ingest_id: Optional[int] = None):
         super().__init__(parent)
         self.setWindowTitle("Ingest Version 1 TreeTap Data (Serial / File)")
         self.resize(680, 560)
 
+        self.target_ingest_id = target_ingest_id
         self.worker_thread: Optional[SerialWorkerThread] = None
         self.loaded_file_name: Optional[str] = None
 
@@ -348,6 +349,7 @@ class V1IngestDialog(QDialog):
                 source_name=source_name,
                 separation_cm=separation_cm,
                 conn=conn,
+                target_ingest_id=self.target_ingest_id,
             )
             if stats.get("status") == "SKIPPED_DUPLICATE":
                 prev = stats.get("previous_ingest", {})

@@ -9,6 +9,11 @@ import ftplib
 import time
 import logging
 
+import re
+
+# Regex matching TreeTap V2 zip archive pattern: YYYY-MM-DD-HH-MM-SS.zip (e.g. 2026-10-08-10-11-12.zip)
+V2_ZIP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.zip$", re.IGNORECASE)
+
 logger = logging.getLogger(__name__)
 
 
@@ -104,14 +109,16 @@ class FtpDownloader:
             except Exception:
                 pass
 
-        # Filter relevant files: summary CSVs (treetap-*.csv) and zip archives (*.zip)
-        target_files = [
-            f for f in remote_files
-            if f.lower().endswith(".zip") or (f.lower().endswith(".csv") and "treetap" in f.lower())
-        ]
-
-        if not target_files:
-            target_files = [f for f in remote_files if f.lower().endswith(".zip") or f.lower().endswith(".csv")]
+        # Filter relevant files: summary CSVs (*.csv) and timestamped zip archives matching YYYY-MM-DD-HH-MM-SS.zip
+        target_files = []
+        for f in remote_files:
+            flow = f.lower().strip()
+            if flow.endswith(".csv"):
+                target_files.append(f)
+            elif flow.endswith(".zip") and V2_ZIP_PATTERN.match(f.strip()):
+                target_files.append(f)
+            else:
+                logger.info(f"Skipping non-matching remote FTP file '{f}'")
 
         downloaded_paths: List[str] = []
         total_count = len(target_files)

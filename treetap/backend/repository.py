@@ -51,7 +51,12 @@ class TreeTapRepository:
                 }
         except Exception:
             pass
-        return None
+    def get_existing_tap_times(self) -> set:
+        try:
+            rows = self.conn.execute("SELECT strftime(tap_time, '%Y-%m-%d %H:%M:%S') FROM taps WHERE tap_time IS NOT NULL").fetchall()
+            return set(r[0] for r in rows if r[0])
+        except Exception:
+            return set()
 
     def insert_measurements(self, measurements: List[Measurement]) -> Dict[str, int]:
         if not measurements:
@@ -218,6 +223,37 @@ class TreeTapRepository:
             [next_id, device_version, source, data_hash, status, records_loaded, details],
         )
         return next_id
+
+    def update_ingest_log(
+        self,
+        ingest_id: int,
+        added_records: int,
+        status: str = "COMPLETED",
+        details: Optional[str] = None,
+    ) -> None:
+        if details:
+            self.conn.execute(
+                """
+                UPDATE ingest_log
+                SET records_loaded = records_loaded + ?,
+                    status = ?,
+                    details = ?,
+                    ingest_time = CURRENT_TIMESTAMP
+                WHERE ingest_id = ?
+                """,
+                [added_records, status, details, ingest_id],
+            )
+        else:
+            self.conn.execute(
+                """
+                UPDATE ingest_log
+                SET records_loaded = records_loaded + ?,
+                    status = ?,
+                    ingest_time = CURRENT_TIMESTAMP
+                WHERE ingest_id = ?
+                """,
+                [added_records, status, ingest_id],
+            )
 
     def get_summary_stats(self) -> Dict[str, Any]:
         meas_count = self.conn.execute("SELECT COUNT(*) FROM measurements").fetchone()[0]

@@ -12,21 +12,21 @@ from treetap.v2.summary_parser import parse_summary_directory
 from treetap.v2.archive_reader import TapSignalArchiveReader
 
 
-import hashlib
+import pandas as pd
 
 
-def compute_v2_directory_hash(data_dir: str) -> str:
-    hasher = hashlib.sha256()
-    for root, _, files in sorted(os.walk(data_dir)):
-        for f in sorted(files):
-            p = os.path.join(root, f)
-            try:
-                with open(p, "rb") as fp:
-                    while chunk := fp.read(65536):
-                        hasher.update(chunk)
-            except Exception:
-                pass
-    return hasher.hexdigest()
+def normalize_tap_time_str(val: Any) -> Optional[str]:
+    if not val:
+        return None
+    try:
+        dt = pd.to_datetime(val, format="%d/%m/%y %H:%M:%S", errors="coerce")
+        if pd.isna(dt):
+            dt = pd.to_datetime(val, errors="coerce")
+        if pd.isna(dt):
+            return None
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return None
 
 
 def ingest_v2_directory(
@@ -34,16 +34,17 @@ def ingest_v2_directory(
     db_path: str = "treetap.duckdb",
     conn: Optional[Any] = None,
     source_override: Optional[str] = None,
+    target_ingest_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Ingests all Version 2 summary CSV files and individual tap signal archives
     from data_dir into the DuckDB database at db_path.
-    Includes SHA-256 data fingerprinting and duplicate payload short-circuiting.
+    Filters incoming taps by tap_time so existing taps are not overwritten.
+    If target_ingest_id is specified, appends/updates records in that existing ingestion.
     """
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Target directory '{data_dir}' does not exist.")
 
-    data_hash = compute_v2_directory_hash(data_dir)
     source_str = source_override or os.path.abspath(data_dir)
 
     close_conn_when_done = False
@@ -57,31 +58,6 @@ def ingest_v2_directory(
     try:
         repo = TreeTapRepository(conn)
 
-        # Check for exact duplicate import payload
-        dup = repo.check_duplicate_ingest(data_hash)
-        if dup:
-            repo.log_ingestion(
-                device_version="v2",
-                source=source_str,
-                status="SKIPPED_DUPLICATE",
-                records_loaded=0,
-                details=f"Duplicate payload matching ingest_id #{dup['ingest_id']} ({dup['source']} on {dup['ingest_time']})",
-                data_hash=data_hash,
-            )
-            return {
-                "status": "SKIPPED_DUPLICATE",
-                "previous_ingest": dup,
-                "inserted_measurements": 0,
-                "skipped_measurements": 0,
-                "inserted_taps": 0,
-                "skipped_taps": 0,
-                "inserted_metadata": 0,
-                "skipped_metadata": 0,
-                "inserted_signals": 0,
-                "skipped_signals": 0,
-                "warnings": [],
-            }
-
         # 1. Parse summary files
         measurements, taps = parse_summary_directory(data_dir)
 
@@ -89,44 +65,68 @@ def ingest_v2_directory(
         reader = TapSignalArchiveReader(data_dir)
         metadata_list, signals_list = reader.read_all_taps()
 
+        # 3. Query existing tap_time values in database to prevent overwriting
+        existing_tap_times = repo.get_existing_tap_times()
+
+        skipped_tap_ids = set()
+        new_taps = []
+        for t in taps:
+            t_norm = normalize_tap_time_str(t.tap_time)
+            if t_norm and t_norm in existing_tap_times:
+                skipped_tap_ids.add(t.tap_id)
+            else:
+                new_taps.append(t)
+
+        new_metadata = [m for m in metadata_list if m.tap_id not in skipped_tap_ids]
+        new_signals = [s for s in signals_list if s.tap_id not in skipped_tap_ids]
+
         status = "COMPLETED_WITH_WARNINGS" if reader.warnings else "COMPLETED"
         warn_details = "; ".join(reader.warnings) if reader.warnings else "Clean ingest."
-        details_str = f"Taps: {len(taps)} total. Signals: {len(signals_list)} total. Warnings: {warn_details}"
+        details_str = f"New Taps: {len(new_taps)} / {len(taps)} total. Signals: {len(new_signals)} total. Warnings: {warn_details}"
 
-        ingest_id = repo.log_ingestion(
-            device_version="v2",
-            source=source_str,
-            status=status,
-            records_loaded=len(taps),
-            details=details_str,
-            data_hash=data_hash,
-        )
+        if target_ingest_id is not None:
+            ingest_id = target_ingest_id
+        else:
+            ingest_id = repo.log_ingestion(
+                device_version="v2",
+                source=source_str,
+                status=status,
+                records_loaded=len(new_taps),
+                details=details_str,
+            )
 
         for m in measurements:
             m.ingest_id = ingest_id
             m.local_meas_id = m.meas_id
 
-        for t in taps:
+        for t in new_taps:
             t.ingest_id = ingest_id
             t.local_tap_id = t.tap_id
 
         meas_res = repo.insert_measurements(measurements)
-        taps_res = repo.insert_taps(taps)
-        meta_res = repo.insert_tap_metadata(metadata_list, ingest_id=ingest_id)
-        sig_res = repo.insert_tap_signals(signals_list, ingest_id=ingest_id)
+        taps_res = repo.insert_taps(new_taps)
+        meta_res = repo.insert_tap_metadata(new_metadata, ingest_id=ingest_id)
+        sig_res = repo.insert_tap_signals(new_signals, ingest_id=ingest_id)
+
+        if target_ingest_id is not None:
+            repo.update_ingest_log(
+                ingest_id=target_ingest_id,
+                added_records=taps_res.get("inserted", 0),
+                status=status,
+                details=details_str,
+            )
 
         stats = repo.get_summary_stats()
         stats["status"] = status
         stats["ingest_id"] = ingest_id
-        stats["data_hash"] = data_hash
         stats["inserted_measurements"] = meas_res["inserted"]
         stats["skipped_measurements"] = meas_res["skipped"]
         stats["inserted_taps"] = taps_res["inserted"]
-        stats["skipped_taps"] = taps_res["skipped"]
+        stats["skipped_taps"] = len(taps) - taps_res["inserted"]
         stats["inserted_metadata"] = meta_res["inserted"]
-        stats["skipped_metadata"] = meta_res["skipped"]
+        stats["skipped_metadata"] = len(metadata_list) - meta_res["inserted"]
         stats["inserted_signals"] = sig_res["inserted"]
-        stats["skipped_signals"] = sig_res["skipped"]
+        stats["skipped_signals"] = len(signals_list) - sig_res["inserted"]
         stats["warnings"] = reader.warnings
     finally:
         if close_conn_when_done and conn:
