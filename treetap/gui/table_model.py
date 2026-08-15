@@ -55,10 +55,12 @@ class TreeTapTableModel(QAbstractTableModel):
                 COALESCE(m.offset_ch1, 0.0) AS offset_ch1,
                 COALESCE(m.offset_ch2, 0.0) AS offset_ch2,
                 COALESCE(m.std_ch1, 0.0) AS std_ch1,
-                COALESCE(m.std_ch2, 0.0) AS std_ch2
+                COALESCE(m.std_ch2, 0.0) AS std_ch2,
+                COALESCE(l.source, '') AS ingest_source
             FROM taps t
             LEFT JOIN tap_metadata m ON t.tap_id = m.tap_id
             LEFT JOIN measurements meas ON t.meas_id = meas.meas_id
+            LEFT JOIN ingest_log l ON t.ingest_id = l.ingest_id
             ORDER BY t.tap_id ASC
         """
         self._df = conn.execute(query).df()

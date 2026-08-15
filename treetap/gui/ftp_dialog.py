@@ -89,8 +89,9 @@ class FtpIngestDialog(QDialog):
     Remembers settings across sessions via QSettings.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, conn: Optional[Any] = None):
         super().__init__(parent)
+        self.conn = conn
         self.setWindowTitle("Ingest V2 Data via FTP")
         self.setMinimumWidth(440)
         self.settings = QSettings("TreeTap", "TreeTapSignals")

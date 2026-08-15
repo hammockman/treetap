@@ -693,7 +693,7 @@ class TreeTapMainWindow(QMainWindow):
             if os.path.exists(source):
                 from treetap.v1.ingest import ingest_v1_data
                 try:
-                    res = ingest_v1_data(source, self.conn)
+                    res = ingest_v1_data(source, conn=self.conn)
                     QMessageBox.information(
                         self,
                         "Repeat Ingestion Successful",
@@ -706,6 +706,25 @@ class TreeTapMainWindow(QMainWindow):
                 dlg = V1IngestDialog(self)
                 if dlg.exec() == QDialog.DialogCode.Accepted:
                     self.refresh_views()
+        elif os.path.exists(source) and os.path.isdir(source):
+            try:
+                res = ingest_v2_directory(data_dir=source, conn=self.conn)
+                if res.get("status") == "SKIPPED_DUPLICATE":
+                    prev_id = res.get("previous_ingest", {}).get("ingest_id")
+                    QMessageBox.information(
+                        self,
+                        "Duplicate Ingestion Skipped",
+                        f"Directory '{source}' has already been ingested with identical contents (Ingest #{prev_id}).",
+                    )
+                else:
+                    QMessageBox.information(
+                        self,
+                        "Repeat Ingestion Successful",
+                        f"Re-ingested V2 directory '{source}'.\n\nLoaded {res.get('total_taps', 0)} taps.",
+                    )
+                    self.refresh_views()
+            except Exception as e:
+                QMessageBox.critical(self, "Ingestion Failed", f"Failed to re-ingest V2 directory:\n{str(e)}")
         else:
             dlg = FtpIngestDialog(self, conn=self.conn)
             if dlg.exec() == QDialog.DialogCode.Accepted:

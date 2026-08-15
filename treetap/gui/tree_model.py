@@ -56,9 +56,14 @@ class TreeTapTreeModel(QStandardItemModel):
 
         for ingest_id, ingest_group in ingest_grouped:
             ingest_id = int(ingest_id)
-            src_files = [s for s in ingest_group["source_file"].dropna().unique() if s]
-            main_src = os.path.basename(src_files[0]) if src_files else ""
-            src_info = f" ({main_src})" if main_src else ""
+            ingest_sources = [s for s in ingest_group["ingest_source"].dropna().unique() if s] if "ingest_source" in ingest_group.columns else []
+            if ingest_sources:
+                main_src = str(ingest_sources[0])
+                src_info = f" ({main_src})"
+            else:
+                src_files = [s for s in ingest_group["source_file"].dropna().unique() if s] if "source_file" in ingest_group.columns else []
+                main_src = os.path.basename(src_files[0]) if src_files else ""
+                src_info = f" ({main_src})" if main_src else ""
 
             n_meas = int(ingest_group["global_meas_id"].nunique()) if "global_meas_id" in ingest_group.columns else int(ingest_group["meas_id"].nunique())
             n_taps = len(ingest_group)
