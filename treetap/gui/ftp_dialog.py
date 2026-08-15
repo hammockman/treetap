@@ -4,7 +4,7 @@ Allows user to configure FTP connection details, save preferences via QSettings,
 and download V2 data files with real-time progress.
 """
 
-from typing import Optional, List
+from typing import Optional, List, Any
 import os
 import tempfile
 import shutil
