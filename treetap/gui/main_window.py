@@ -908,23 +908,89 @@ class TreeTapMainWindow(QMainWindow):
         )
         dialog.exec()
 
-    def refresh_views(self) -> None:
+    def refresh_views(
+        self,
+        preserve_tree_state: bool = True,
+        target_ingest_id: Optional[int] = None,
+    ) -> None:
         """
         Reloads database records into table_model and updates tree_model,
-        clearing stale plot selections.
+        preserving tree expansion state and moving selection to the parent Ingest node.
         """
-        if self.conn:
-            self.table_model.load_data_from_db(self.conn)
-            self.tree_model.load_data_from_df(self.table_model._df)
-            self.plot_widget.clear_plots()
-            self.tap_selector.populate_taps([], {})
-            self.current_meas_id = None
+        if not self.conn:
+            return
+
+        expanded_ingest_ids = set()
+        if preserve_tree_state:
+            for r in range(self.tree_proxy.rowCount()):
+                proxy_idx = self.tree_proxy.index(r, 0)
+                if self.tree_view.isExpanded(proxy_idx):
+                    source_idx = self.tree_proxy.mapToSource(proxy_idx)
+                    item = self.tree_model.itemFromIndex(source_idx)
+                    if item:
+                        ing_id = item.data(TreeTapTreeModel.INGEST_ID_ROLE)
+                        if ing_id is not None:
+                            expanded_ingest_ids.add(int(ing_id))
+
+        self.table_model.load_data_from_db(self.conn)
+        self.tree_model.load_data_from_df(self.table_model._df)
+
+        # Re-expand tree to depth 0 plus any previously expanded ingest nodes
+        self.tree_view.expandToDepth(0)
+        if expanded_ingest_ids:
+            for r in range(self.tree_proxy.rowCount()):
+                proxy_idx = self.tree_proxy.index(r, 0)
+                source_idx = self.tree_proxy.mapToSource(proxy_idx)
+                item = self.tree_model.itemFromIndex(source_idx)
+                if item:
+                    ing_id = item.data(TreeTapTreeModel.INGEST_ID_ROLE)
+                    if ing_id is not None and int(ing_id) in expanded_ingest_ids:
+                        self.tree_view.setExpanded(proxy_idx, True)
+
+        self.plot_widget.clear_plots()
+        self.tap_selector.populate_taps([], {})
+        self.current_meas_id = None
+
+        if target_ingest_id is not None:
+            self.select_ingest_node(target_ingest_id)
+
+    def select_ingest_node(self, target_ingest_id: int) -> None:
+        """
+        Selects the top-level Ingest node matching target_ingest_id in the tree view.
+        """
+        for r in range(self.tree_proxy.rowCount()):
+            proxy_idx = self.tree_proxy.index(r, 0)
+            source_idx = self.tree_proxy.mapToSource(proxy_idx)
+            item = self.tree_model.itemFromIndex(source_idx)
+            if item and item.data(TreeTapTreeModel.ITEM_TYPE_ROLE) == "ingest":
+                ing_id = item.data(TreeTapTreeModel.INGEST_ID_ROLE)
+                if ing_id is not None and int(ing_id) == target_ingest_id:
+                    self.tree_view.selectionModel().clearSelection()
+                    self.tree_view.selectionModel().select(
+                        proxy_idx,
+                        QItemSelectionModel.SelectionFlag.Select | QItemSelectionModel.SelectionFlag.Rows,
+                    )
+                    self.tree_view.scrollTo(proxy_idx)
+                    return
 
     def on_delete_taps(self, tap_ids: List[int]) -> None:
         if not tap_ids or not self.conn:
             return
         if not self.ensure_write_connection():
             return
+
+        target_ingest_id = None
+        try:
+            placeholders = ", ".join(["?"] * len(tap_ids))
+            row = self.conn.execute(
+                f"SELECT ingest_id FROM taps WHERE tap_id IN ({placeholders}) LIMIT 1",
+                tap_ids,
+            ).fetchone()
+            if row and row[0] is not None:
+                target_ingest_id = int(row[0])
+        except Exception:
+            pass
+
         tap_str = ", ".join(map(str, tap_ids))
         reply = QMessageBox.question(
             self,
@@ -937,7 +1003,7 @@ class TreeTapMainWindow(QMainWindow):
             try:
                 repo = TreeTapRepository(self.conn)
                 count = repo.delete_taps(tap_ids)
-                self.refresh_views()
+                self.refresh_views(preserve_tree_state=True, target_ingest_id=target_ingest_id)
                 self.status_bar.showMessage(f"Successfully deleted {count} tap(s)")
                 QMessageBox.information(self, "Deleted", f"Successfully deleted {count} tap(s).")
             except Exception as e:
@@ -948,6 +1014,19 @@ class TreeTapMainWindow(QMainWindow):
             return
         if not self.ensure_write_connection():
             return
+
+        target_ingest_id = None
+        try:
+            placeholders = ", ".join(["?"] * len(meas_ids))
+            row = self.conn.execute(
+                f"SELECT ingest_id FROM measurements WHERE meas_id IN ({placeholders}) LIMIT 1",
+                meas_ids,
+            ).fetchone()
+            if row and row[0] is not None:
+                target_ingest_id = int(row[0])
+        except Exception:
+            pass
+
         meas_str = ", ".join(map(str, meas_ids))
         reply = QMessageBox.question(
             self,
@@ -960,7 +1039,7 @@ class TreeTapMainWindow(QMainWindow):
             try:
                 repo = TreeTapRepository(self.conn)
                 count = repo.delete_measurements(meas_ids)
-                self.refresh_views()
+                self.refresh_views(preserve_tree_state=True, target_ingest_id=target_ingest_id)
                 self.status_bar.showMessage(f"Successfully deleted {count} measurement session(s)")
                 QMessageBox.information(self, "Deleted", f"Successfully deleted {count} measurement session(s).")
             except Exception as e:
