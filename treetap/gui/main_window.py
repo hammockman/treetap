@@ -80,10 +80,6 @@ class TreeTapMainWindow(QMainWindow):
         # 1. Top Control Bar (Search & Quick Action)
         control_bar = QHBoxLayout()
 
-        self.db_label = QLabel(f"<b>Database:</b> {os.path.basename(self.db_path)}")
-        control_bar.addWidget(self.db_label)
-
-        control_bar.addSpacing(20)
         control_bar.addWidget(QLabel("Filter:"))
 
         self.search_edit = QLineEdit()
@@ -218,9 +214,10 @@ class TreeTapMainWindow(QMainWindow):
         self.connect_db(self.db_path)
 
     def update_window_title(self) -> None:
-        title = f"Treetap Signals - {os.path.basename(self.db_path)}"
+        abs_path = os.path.abspath(self.db_path) if self.db_path else ""
+        title = f"TreeTap Signals - {abs_path}"
         if getattr(self, "is_read_only", False):
-            title += " [Read-Only]"
+            title += " [Read-Only Mode]"
         self.setWindowTitle(title)
 
     def _create_menu_bar(self) -> None:
@@ -327,7 +324,7 @@ class TreeTapMainWindow(QMainWindow):
             self.tree_view.expandToDepth(0)
 
             mode_str = " (Read-Only Mode)" if self.is_read_only else ""
-            self.db_label.setText(f"<b>Database:</b> {os.path.basename(self.db_path)}{mode_str}")
+            self.update_window_title()
             self.status_bar.showMessage(
                 f"Loaded {self.table_model.rowCount()} taps from {os.path.basename(db_path)}{mode_str}"
             )
@@ -351,7 +348,7 @@ class TreeTapMainWindow(QMainWindow):
                 self.conn.close()
             self.conn = duckdb.connect(database=self.db_path, read_only=False)
             self.is_read_only = False
-            self.db_label.setText(f"<b>Database:</b> {os.path.basename(self.db_path)}")
+            self.update_window_title()
             return True
         except duckdb.Error:
             self.conn = duckdb.connect(database=self.db_path, read_only=True)
