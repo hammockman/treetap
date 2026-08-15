@@ -33,6 +33,7 @@ def ingest_v2_directory(
     data_dir: str = "data/v2",
     db_path: str = "treetap.duckdb",
     conn: Optional[Any] = None,
+    source_override: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Ingests all Version 2 summary CSV files and individual tap signal archives
@@ -43,6 +44,7 @@ def ingest_v2_directory(
         raise FileNotFoundError(f"Target directory '{data_dir}' does not exist.")
 
     data_hash = compute_v2_directory_hash(data_dir)
+    source_str = source_override or os.path.abspath(data_dir)
 
     close_conn_when_done = False
     if conn is None:
@@ -60,7 +62,7 @@ def ingest_v2_directory(
         if dup:
             repo.log_ingestion(
                 device_version="v2",
-                source=os.path.abspath(data_dir),
+                source=source_str,
                 status="SKIPPED_DUPLICATE",
                 records_loaded=0,
                 details=f"Duplicate payload matching ingest_id #{dup['ingest_id']} ({dup['source']} on {dup['ingest_time']})",
@@ -93,7 +95,7 @@ def ingest_v2_directory(
 
         ingest_id = repo.log_ingestion(
             device_version="v2",
-            source=os.path.abspath(data_dir),
+            source=source_str,
             status=status,
             records_loaded=len(taps),
             details=details_str,

@@ -724,8 +724,41 @@ class TreeTapMainWindow(QMainWindow):
                 QMessageBox.critical(self, "Ingestion Failed", f"Failed to re-ingest V2 directory:\n{str(e)}")
         else:
             dlg = FtpIngestDialog(self, conn=self.conn)
-            if dlg.exec() == QDialog.DialogCode.Accepted:
-                self.refresh_views()
+            if dlg.exec() == QDialog.DialogCode.Accepted and dlg.temp_dir:
+                try:
+                    remote_src = f"ftp://{dlg.edit_host.text().strip()}:{dlg.spin_port.value()}{dlg.edit_remote_dir.text().strip()}"
+                    stats = ingest_v2_directory(data_dir=dlg.temp_dir, db_path=self.db_path, conn=self.conn, source_override=remote_src)
+                    if stats.get("status") == "SKIPPED_DUPLICATE":
+                        prev = stats.get("previous_ingest", {})
+                        msg = (
+                            "Duplicate FTP Data Payload Detected!\n\n"
+                            f"This exact dataset (SHA-256 fingerprint) was previously imported:\n"
+                            f"• Previous Ingest ID: #{prev.get('ingest_id')}\n"
+                            f"• Original Source: {prev.get('source')}\n"
+                            f"• Import Timestamp: {prev.get('ingest_time')}\n\n"
+                            "No duplicate records were added to the database."
+                        )
+                        QMessageBox.warning(self, "Duplicate Import Skipped", msg)
+                    else:
+                        ins_meas = stats.get("inserted_measurements", 0)
+                        ins_taps = stats.get("inserted_taps", 0)
+                        ins_sig = stats.get("inserted_signals", 0)
+                        msg = (
+                            "Repeat FTP Ingestion Complete!\n\n"
+                            f"• Ingest ID: #{stats.get('ingest_id')}\n"
+                            f"• Measurements inserted: {ins_meas}\n"
+                            f"• Taps inserted: {ins_taps}\n"
+                            f"• Signals inserted: {ins_sig}"
+                        )
+                        if stats.get("warnings"):
+                            msg += f"\n\nWarnings: {len(stats['warnings'])}"
+                        QMessageBox.information(self, "Repeat FTP Ingestion Complete", msg)
+                        self.refresh_views()
+                except Exception as e:
+                    QMessageBox.critical(self, "FTP Ingestion Error", f"Failed to ingest downloaded FTP data:\n{e}")
+                finally:
+                    if dlg.temp_dir and os.path.exists(dlg.temp_dir):
+                        shutil.rmtree(dlg.temp_dir, ignore_errors=True)
 
     def on_create_new_database(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
