@@ -1,11 +1,12 @@
 """
 Version 2 FTP Downloader module.
-Downloads V2 summary CSV files and zip archives from remote FTP/FTPS servers.
+Downloads V2 summary CSV files and zip archives from remote FTP/FTPS servers with auto-reconnection and retry handling.
 """
 
 from typing import Callable, Optional, List, Dict, Any
 import os
 import ftplib
+import time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,7 @@ logger = logging.getLogger(__name__)
 class FtpDownloader:
     """
     Wraps Python's standard ftplib.FTP and ftplib.FTP_TLS to download TreeTap V2 files.
+    Includes auto-reconnection and retry mechanisms to handle embedded/Android server timeouts.
     """
 
     def __init__(
@@ -31,6 +33,41 @@ class FtpDownloader:
         self.password = password
         self.use_tls = use_tls
         self.passive = passive
+        self.ftp: Optional[Any] = None
+
+    def _connect(self, remote_dir: str) -> Any:
+        if self.ftp:
+            try:
+                self.ftp.quit()
+            except Exception:
+                try:
+                    self.ftp.close()
+                except Exception:
+                    pass
+            self.ftp = None
+
+        if self.use_tls:
+            ftp = ftplib.FTP_TLS()
+            ftp.connect(host=self.host, port=self.port, timeout=15)
+            ftp.login(user=self.username, passwd=self.password)
+            ftp.prot_p()  # Secure data connection
+        else:
+            ftp = ftplib.FTP()
+            ftp.connect(host=self.host, port=self.port, timeout=15)
+            ftp.login(user=self.username, passwd=self.password)
+
+        ftp.set_pasv(self.passive)
+
+        if remote_dir and remote_dir != "/":
+            try:
+                ftp.cwd(remote_dir)
+            except ftplib.error_perm:
+                if remote_dir.startswith("/"):
+                    ftp.cwd(remote_dir.lstrip("/"))
+                else:
+                    raise
+        self.ftp = ftp
+        return ftp
 
     def download_v2_folder(
         self,
@@ -40,39 +77,32 @@ class FtpDownloader:
     ) -> List[str]:
         """
         Connects to the FTP server, lists remote files matching treetap-*.csv and *.zip in remote_dir,
-        and downloads them into local_target_dir.
-
-        Returns list of downloaded local file paths.
+        and downloads them into local_target_dir with retry and auto-reconnection logic.
         """
         os.makedirs(local_target_dir, exist_ok=True)
+        self._connect(remote_dir)
 
-        if self.use_tls:
-            ftp = ftplib.FTP_TLS()
-            ftp.connect(host=self.host, port=self.port, timeout=30)
-            ftp.login(user=self.username, passwd=self.password)
-            ftp.prot_p()  # Secure data connection
-        else:
-            ftp = ftplib.FTP()
-            ftp.connect(host=self.host, port=self.port, timeout=30)
-            ftp.login(user=self.username, passwd=self.password)
+        # List files with retry
+        remote_files: List[str] = []
+        for attempt in range(3):
+            try:
+                remote_files = self.ftp.nlst()
+                break
+            except Exception as e:
+                logger.warning(f"FTP nlst attempt {attempt+1} failed ({e}). Reconnecting...")
+                time.sleep(0.5)
+                self._connect(remote_dir)
 
-        ftp.set_pasv(self.passive)
-
-        if remote_dir and remote_dir != "/":
-            ftp.cwd(remote_dir)
-
-        # List files in current remote directory
-        remote_files = []
-        try:
-            remote_files = ftp.nlst()
-        except ftplib.error_perm:
-            # Fallback if nlst is restricted
-            lines = []
-            ftp.dir(lines.append)
-            for line in lines:
-                parts = line.split()
-                if parts:
-                    remote_files.append(parts[-1])
+        if not remote_files:
+            try:
+                lines: List[str] = []
+                self.ftp.dir(lines.append)
+                for line in lines:
+                    parts = line.split()
+                    if parts:
+                        remote_files.append(parts[-1])
+            except Exception:
+                pass
 
         # Filter relevant files: summary CSVs (treetap-*.csv) and zip archives (*.zip)
         target_files = [
@@ -81,10 +111,9 @@ class FtpDownloader:
         ]
 
         if not target_files:
-            # If no specific treetap files found, list all .csv and .zip files
             target_files = [f for f in remote_files if f.lower().endswith(".zip") or f.lower().endswith(".csv")]
 
-        downloaded_paths = []
+        downloaded_paths: List[str] = []
         total_count = len(target_files)
 
         for idx, filename in enumerate(target_files, start=1):
@@ -92,15 +121,38 @@ class FtpDownloader:
                 progress_callback(idx, total_count, filename)
 
             local_path = os.path.join(local_target_dir, filename)
-            with open(local_path, "wb") as f:
-                ftp.retrbinary(f"RETR {filename}", f.write)
+            download_success = False
 
-            downloaded_paths.append(local_path)
+            for attempt in range(3):
+                try:
+                    time.sleep(0.15)
+                    try:
+                        self.ftp.voidcmd("NOOP")
+                    except Exception:
+                        pass
+                    with open(local_path, "wb") as f:
+                        self.ftp.retrbinary(f"RETR {filename}", f.write)
+                    download_success = True
+                    break
+                except Exception as err:
+                    logger.warning(f"FTP RETR attempt {attempt+1} failed for {filename}: {err}. Reconnecting...")
+                    time.sleep(0.5)
+                    try:
+                        self._connect(remote_dir)
+                    except Exception as conn_err:
+                        logger.error(f"FTP reconnect error: {conn_err}")
 
-        try:
-            ftp.quit()
-        except Exception:
-            ftp.close()
+            if download_success:
+                downloaded_paths.append(local_path)
+
+        if self.ftp:
+            try:
+                self.ftp.quit()
+            except Exception:
+                try:
+                    self.ftp.close()
+                except Exception:
+                    pass
 
         return downloaded_paths
 
@@ -114,28 +166,20 @@ class FtpDownloader:
         Connects to FTP server and downloads a single specified file to local_destination_path.
         """
         os.makedirs(os.path.dirname(os.path.abspath(local_destination_path)), exist_ok=True)
+        self._connect(remote_dir)
 
-        if self.use_tls:
-            ftp = ftplib.FTP_TLS()
-            ftp.connect(host=self.host, port=self.port, timeout=15)
-            ftp.login(user=self.username, passwd=self.password)
-            ftp.prot_p()
-        else:
-            ftp = ftplib.FTP()
-            ftp.connect(host=self.host, port=self.port, timeout=15)
-            ftp.login(user=self.username, passwd=self.password)
+        for attempt in range(3):
+            try:
+                time.sleep(0.05)
+                with open(local_destination_path, "wb") as f:
+                    self.ftp.retrbinary(f"RETR {filename}", f.write)
+                return True
+            except Exception as e:
+                logger.warning(f"FTP single file RETR attempt {attempt+1} failed: {e}. Reconnecting...")
+                time.sleep(0.5)
+                try:
+                    self._connect(remote_dir)
+                except Exception:
+                    pass
 
-        ftp.set_pasv(self.passive)
-
-        if remote_dir and remote_dir != "/":
-            ftp.cwd(remote_dir)
-
-        with open(local_destination_path, "wb") as f:
-            ftp.retrbinary(f"RETR {filename}", f.write)
-
-        try:
-            ftp.quit()
-        except Exception:
-            ftp.close()
-
-        return os.path.exists(local_destination_path)
+        return False
