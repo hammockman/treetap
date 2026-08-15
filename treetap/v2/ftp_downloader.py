@@ -125,6 +125,8 @@ class FtpDownloader:
 
             for attempt in range(3):
                 try:
+                    if not self.ftp:
+                        self._connect(remote_dir)
                     time.sleep(0.15)
                     try:
                         self.ftp.voidcmd("NOOP")
@@ -170,6 +172,8 @@ class FtpDownloader:
 
         for attempt in range(3):
             try:
+                if not self.ftp:
+                    self._connect(remote_dir)
                 time.sleep(0.05)
                 with open(local_destination_path, "wb") as f:
                     self.ftp.retrbinary(f"RETR {filename}", f.write)
