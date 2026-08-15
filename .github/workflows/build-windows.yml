@@ -13,7 +13,7 @@ jobs:
     runs-on: windows-latest
 
     permissions:
-      contents: read
+      contents: write
       actions: write
 
     steps:
@@ -96,3 +96,20 @@ jobs:
         with:
           name: TreeTap-Windows-Setup
           path: Output/TreeTapSetup.exe
+
+      - name: Publish Rolling Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          tag_name: latest
+          target_commitish: ${{ github.sha }}
+          name: TreeTap Latest Build
+          body: |
+            Automated rolling release build of the TreeTap Windows Installer (`TreeTapSetup.exe`).
+            
+            **Direct Download**: [`TreeTapSetup.exe`](https://github.com/hammockman/treetap/releases/download/latest/TreeTapSetup.exe)
+          prerelease: true
+          make_latest: "true"
+          files: Output/TreeTapSetup.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
